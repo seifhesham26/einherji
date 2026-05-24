@@ -1,0 +1,53 @@
+"use client";
+
+import { Bell } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { trpc } from "@/lib/trpc-client";
+import { formatRelativeDate } from "@/utils/format-relative-date";
+
+export default function FollowUpReminders() {
+  const { data: overdue = [], isLoading } = trpc.leads.getOverdueFollowUps.useQuery();
+
+  if (isLoading) {
+    return <Skeleton className="h-48 rounded-lg" />;
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Follow-up Reminders</span>
+          {overdue.length > 0 && (
+            <Badge variant="destructive" className="text-xs ml-auto">
+              {overdue.length}
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {overdue.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No overdue follow-ups.</p>
+        ) : (
+          <ul className="space-y-2">
+            {overdue.map((lead) => (
+              <li key={lead.id} className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {lead.firstName} {lead.lastName ?? ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{lead.company}</p>
+                </div>
+                <span className="text-xs text-destructive shrink-0 whitespace-nowrap">
+                  {formatRelativeDate(lead.nextActionAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
