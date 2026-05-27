@@ -30,6 +30,10 @@ const QUICK_ACTION_LABEL: Partial<Record<LeadStatus, string>> = {
   interview: "Mark Offer",
 };
 
+function getInitials(firstName: string, lastName?: string | null) {
+  return `${firstName[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
+}
+
 export default function LeadKanbanCard({ lead, index }: LeadKanbanCardProps) {
   const router = useRouter();
   const updateLead = useUpdateLead();
@@ -59,27 +63,36 @@ export default function LeadKanbanCard({ lead, index }: LeadKanbanCardProps) {
           {...provided.dragHandleProps}
         >
           <Card
-            className={`cursor-grab active:cursor-grabbing transition-shadow ${
-              snapshot.isDragging ? "shadow-lg ring-1 ring-primary/20" : ""
+            className={`cursor-grab active:cursor-grabbing transition-all rounded-lg ${
+              snapshot.isDragging ? "shadow-lg ring-1 ring-primary/30 rotate-1" : "hover:shadow-sm"
             }`}
           >
-            <CardContent className="p-3 space-y-2">
-              <div>
-                <p className="font-medium text-sm leading-snug">
-                  {lead.firstName} {lead.lastName ?? ""}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">{lead.company}</p>
+            <CardContent className="p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-semibold text-primary">
+                    {getInitials(lead.firstName, lead.lastName)}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-sm leading-snug truncate">
+                    {lead.firstName} {lead.lastName ?? ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{lead.company}</p>
+                </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">
-                {formatRelativeDate(lead.lastContactedAt)}
-              </p>
+              {lead.lastContactedAt && (
+                <p className="text-xs text-muted-foreground">
+                  {formatRelativeDate(lead.lastContactedAt)}
+                </p>
+              )}
 
               {actionLabel && (
                 <Button
                   size="sm"
                   variant="outline"
-                  className="w-full h-7 text-xs"
+                  className="w-full h-7 text-xs font-medium"
                   onClick={handleQuickAction}
                   disabled={isUpdating}
                 >

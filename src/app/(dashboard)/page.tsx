@@ -1,4 +1,6 @@
-// This file exists because Next.js created it alongside (dashboard)/dashboard/page.tsx.
-// app/page.tsx (at root) handles / and redirects to /dashboard.
-// This file should not be reached in practice.
-export { default } from "@/app/(dashboard)/dashboard/page";
+import { redirect } from "next/navigation";
+
+// Route group (dashboard) also maps to "/" — defer to /dashboard to avoid conflict with the landing page at app/page.tsx
+export default function RootGroupPage() {
+  redirect("/dashboard");
+}

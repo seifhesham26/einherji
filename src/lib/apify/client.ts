@@ -1,10 +1,6 @@
 import { ApifyClient } from "apify-client";
 import { env } from "@/lib/env";
 
-export const apify = new ApifyClient({ token: env.APIFY_API_TOKEN });
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 export const MAX_JOBS_PER_SCRAPE = 100;
 export const MAX_MANAGERS_PER_JOB = 5;
 
@@ -15,7 +11,6 @@ const COMPANY_SIZE_FILTERS: Record<string, string> = {
   "1001+": "E,F",
 };
 
-// Maps job title keywords → likely hiring manager titles to search for
 const MANAGER_TITLE_MAP: Record<string, string[]> = {
   engineer: ["Engineering Manager", "VP Engineering", "CTO", "Head of Engineering", "Director of Engineering"],
   developer: ["Engineering Manager", "VP Engineering", "CTO", "Head of Engineering", "Director of Engineering"],
@@ -61,9 +56,24 @@ export interface ScrapedProfile {
   about: string;
 }
 
+// ─── Factory ──────────────────────────────────────────────────────────────────
+
+// Creates a client with the user's personal token first, falling back to the env token.
+// Throws a user-facing error if neither is configured.
+function createApifyClient(userToken?: string | null): ApifyClient {
+  const token = userToken ?? env.APIFY_API_TOKEN;
+  if (!token) {
+    throw new Error(
+      "No Apify API token found. Add your key in Settings → Integrations to enable job scraping."
+    );
+  }
+  return new ApifyClient({ token });
+}
+
 // ─── Functions ────────────────────────────────────────────────────────────────
 
-export async function scrapeLinkedInJobs(input: ScrapeJobsInput): Promise<ScrapedJob[]> {
+export async function scrapeLinkedInJobs(input: ScrapeJobsInput, apifyToken?: string | null): Promise<ScrapedJob[]> {
+  const apify = createApifyClient(apifyToken);
   const run = await apify.actor("curious_coder/linkedin-jobs-scraper").call({
     searchTerms: input.titles,
     location: input.locations.join(", "),
@@ -78,7 +88,13 @@ export async function scrapeLinkedInJobs(input: ScrapeJobsInput): Promise<Scrape
   return items as unknown as ScrapedJob[];
 }
 
-export async function findHiringManagers(company: string, jobTitle: string, location?: string): Promise<ScrapedProfile[]> {
+export async function findHiringManagers(
+  company: string,
+  jobTitle: string,
+  location?: string,
+  apifyToken?: string | null,
+): Promise<ScrapedProfile[]> {
+  const apify = createApifyClient(apifyToken);
   const targetTitles = getManagerTitles(jobTitle);
   const searchQuery = targetTitles.map((title) => `"${title}"`).join(" OR ");
 

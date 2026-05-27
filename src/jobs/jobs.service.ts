@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
 import { scrapeLinkedInJobs, findHiringManagers } from "@/lib/apify/client";
 import { getActiveCriteria } from "@/criteria/criteria.db";
+import { getSettingsByUserId } from "@/settings/settings.db";
 import { getAllJobs, getJobById, insertJobs, markJobProcessed } from "./jobs.db";
 import { insertLeads } from "@/leads/leads.db";
 import type { GetJobsInput } from "./jobs.validators";
@@ -11,31 +12,47 @@ export async function fetchJobs(db: Database, userId: string, input: GetJobsInpu
 }
 
 export async function scrapeAndSaveJobs(db: Database, userId: string) {
-  const activeCriteria = await getActiveCriteria(db, userId);
+  const [activeCriteria, settings] = await Promise.all([
+    getActiveCriteria(db, userId),
+    getSettingsByUserId(db, userId),
+  ]);
+
   if (!activeCriteria) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "No active criteria found. Set up your criteria first." });
   }
 
-  const scraped = await scrapeLinkedInJobs({
-    titles: activeCriteria.titles,
-    locations: activeCriteria.locations,
-    companySizeMin: activeCriteria.companySizeMin ?? undefined,
-    companySizeMax: activeCriteria.companySizeMax ?? undefined,
-    salaryMin: activeCriteria.salaryMin ?? undefined,
-    industries: activeCriteria.industries ?? undefined,
-  });
+  const scraped = await scrapeLinkedInJobs(
+    {
+      titles: activeCriteria.titles,
+      locations: activeCriteria.locations,
+      companySizeMin: activeCriteria.companySizeMin ?? undefined,
+      companySizeMax: activeCriteria.companySizeMax ?? undefined,
+      salaryMin: activeCriteria.salaryMin ?? undefined,
+      industries: activeCriteria.industries ?? undefined,
+    },
+    settings?.apifyApiToken,
+  );
 
   const inserted = await insertJobs(db, userId, scraped);
   return { inserted: inserted.length, total: scraped.length };
 }
 
 export async function findAndSaveManagers(db: Database, userId: string, jobId: string) {
-  const job = await getJobById(db, jobId);
+  const [job, settings] = await Promise.all([
+    getJobById(db, jobId),
+    getSettingsByUserId(db, userId),
+  ]);
+
   if (!job) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
   }
 
-  const profiles = await findHiringManagers(job.company, job.title, job.location ?? undefined);
+  const profiles = await findHiringManagers(
+    job.company,
+    job.title,
+    job.location ?? undefined,
+    settings?.apifyApiToken,
+  );
 
   const insertedLeads = await insertLeads(db, userId, profiles.map((profile) => ({
     jobId: job.id,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Clock } from "lucide-react";
+import { CheckCircle2, Clock, Inbox } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import ApprovalCard from "./approval-card";
@@ -22,9 +22,15 @@ export default function ApprovalQueue() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4 w-full max-w-2xl mx-auto">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="space-y-6 w-full max-w-2xl mx-auto">
+        <div className="space-y-4">
+          <div>
+            <h1 className="text-xl font-semibold">Messages</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Review and approve AI-generated outreach.</p>
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
+          <Skeleton className="h-72 w-full rounded-xl" />
+        </div>
       </div>
     );
   }
@@ -38,15 +44,24 @@ export default function ApprovalQueue() {
 
   if (remaining <= 0 || totalInQueue === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-        <CheckCircle2 className="h-12 w-12 text-green-500" />
+      <div className="space-y-6">
         <div>
-          <p className="text-xl font-semibold">All done!</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {approvedToday > 0
-              ? `You approved ${approvedToday} message${approvedToday !== 1 ? "s" : ""} today.`
-              : "No messages in the queue right now."}
-          </p>
+          <h1 className="text-xl font-semibold">Messages</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Review and approve AI-generated outreach.</p>
+        </div>
+
+        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+          <div className="rounded-full bg-emerald-500/10 p-5">
+            <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-lg font-semibold">Queue's clear!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {approvedToday > 0
+                ? `You approved ${approvedToday} message${approvedToday !== 1 ? "s" : ""} today.`
+                : "No messages in the queue right now. Find managers on the Jobs page to generate some."}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -56,19 +71,32 @@ export default function ApprovalQueue() {
 
   return (
     <div className="flex flex-col items-center gap-6 w-full">
-      {/* Progress header */}
-      <div className="w-full max-w-2xl space-y-2">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {totalSeen} of {totalInQueue} reviewed
-            {approvedToday > 0 && ` · ${approvedToday} approved today`}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
-            ~{estimatedMinutes} min left
-          </span>
+      {/* Header + progress */}
+      <div className="w-full max-w-2xl space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold">Messages</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Review and approve AI-generated outreach.</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 text-sm text-muted-foreground">
+            <Inbox className="h-4 w-4" />
+            <span className="tabular-nums">{remaining} left</span>
+          </div>
         </div>
-        <Progress value={progressValue} className="h-1.5" />
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              {totalSeen} of {totalInQueue} reviewed
+              {approvedToday > 0 && ` · ${approvedToday} approved today`}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              ~{estimatedMinutes}m left
+            </span>
+          </div>
+          <Progress value={progressValue} className="h-1.5" />
+        </div>
       </div>
 
       {/* Current card */}

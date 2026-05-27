@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ExternalLink, MessageSquarePlus, Search } from "lucide-react";
+import { Loader2, ExternalLink, MessageSquarePlus, Search, Users } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -25,27 +25,25 @@ const STATUS_LABELS: Record<string, string> = {
   no_response: "No Response",
 };
 
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  not_contacted: "secondary",
-  message_sent: "default",
-  reply_received: "default",
-  call_scheduled: "default",
-  interview: "default",
-  offer: "default",
-  rejected: "destructive",
-  no_response: "outline",
+const STATUS_COLORS: Record<string, string> = {
+  not_contacted: "bg-muted text-muted-foreground border-transparent",
+  message_sent: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  reply_received: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+  call_scheduled: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+  interview: "bg-violet-500/10 text-violet-500 border-violet-500/20",
+  offer: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  rejected: "bg-red-500/10 text-red-500 border-red-500/20",
+  no_response: "bg-muted text-muted-foreground border-transparent",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  not_contacted: "text-muted-foreground",
-  message_sent: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  reply_received: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  call_scheduled: "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  interview: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-  offer: "bg-green-500/10 text-green-500 border-green-500/20",
-  rejected: "bg-red-500/10 text-red-500 border-red-500/20",
-  no_response: "bg-muted text-muted-foreground",
-};
+function LeadAvatar({ firstName, lastName }: { firstName: string; lastName?: string | null }) {
+  const initials = `${firstName[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
+  return (
+    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+      <span className="text-xs font-semibold text-primary">{initials}</span>
+    </div>
+  );
+}
 
 export default function LeadsTable() {
   const router = useRouter();
@@ -69,16 +67,14 @@ export default function LeadsTable() {
     router.push("/messages");
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="text-xl font-semibold">Leads</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Hiring managers found for your target jobs.</p>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -91,7 +87,7 @@ export default function LeadsTable() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as LeadStatus | "all")}>
-          <SelectTrigger className="w-full sm:w-48">
+          <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -103,30 +99,49 @@ export default function LeadsTable() {
         </Select>
       </div>
 
-      <p className="text-sm text-muted-foreground">{filtered.length} lead{filtered.length !== 1 ? "s" : ""}</p>
+      <p className="text-sm text-muted-foreground -mt-2">
+        {filtered.length} lead{filtered.length !== 1 ? "s" : ""}
+      </p>
 
-      {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-          <p className="text-sm">No leads yet. Find managers on the Jobs page to get started.</p>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+          <div className="rounded-full bg-muted p-4">
+            <Users className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">No leads yet</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Go to Jobs and click "Find Manager" to discover hiring contacts.
+            </p>
+          </div>
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[180px]">Name</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Last Contacted</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>Last Contact</TableHead>
+                <TableHead className="text-right w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((lead) => (
-                <TableRow key={lead.id}>
-                  <TableCell className="font-medium">
-                    {lead.firstName} {lead.lastName ?? ""}
+                <TableRow key={lead.id} className="group">
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <LeadAvatar firstName={lead.firstName} lastName={lead.lastName} />
+                      <span className="font-medium text-sm">
+                        {lead.firstName} {lead.lastName ?? ""}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-40 truncate">
                     {lead.title ?? "—"}
@@ -144,12 +159,13 @@ export default function LeadsTable() {
                     {formatRelativeDate(lead.lastContactedAt)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleGenerateMessage(lead.id)}
                         disabled={generateMessage.isPending && generateMessage.variables?.leadId === lead.id}
+                        title="Generate message"
                       >
                         {generateMessage.isPending && generateMessage.variables?.leadId === lead.id ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -163,6 +179,7 @@ export default function LeadsTable() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className={buttonVariants({ size: "sm", variant: "ghost" })}
+                          title="View on LinkedIn"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>

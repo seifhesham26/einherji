@@ -146,6 +146,23 @@ export const leads = pgTable("leads", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ─── User Settings ────────────────────────────────────────────────────────────
+// Per-user configuration: profile extras + integration keys
+
+export const userSettings = pgTable("user_settings", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+
+  jobTitle: text("job_title"),
+  linkedinUrl: text("linkedin_url"),
+
+  // Personal Apify API token — overrides the server-wide APIFY_API_TOKEN env var
+  apifyApiToken: text("apify_api_token"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ─── Messages ─────────────────────────────────────────────────────────────────
 // AI-generated outreach messages, one per lead
 

@@ -5,12 +5,16 @@ import { z } from "zod";
 
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  APIFY_API_TOKEN: z.string().min(1),
+  // Optional server-wide fallback — users can supply their own key in Settings
+  APIFY_API_TOKEN: z.string().optional(),
   OPENROUTER_API_KEY: z.string().min(1),
-  OPENAI_API_KEY: z.string().optional(), // optional — only needed for direct gpt-* models
+  OPENAI_API_KEY: z.string().optional(),
   BETTER_AUTH_SECRET: z.string().min(1),
   BETTER_AUTH_URL: z.string().url(),
   NEXT_PUBLIC_APP_URL: z.string().url(),
+  // Resend — optional; falls back to console.log in dev when unset
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
 });
 
 // ─── Client-safe env vars ─────────────────────────────────────────────────────

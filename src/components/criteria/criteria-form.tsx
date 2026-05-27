@@ -114,6 +114,13 @@ export default function CriteriaForm() {
 
   return (
     <form onSubmit={form.handleSubmit((data) => saveCriteria.mutate(data))} className="space-y-8 max-w-2xl">
+      {/* Page header */}
+      <div>
+        <h1 className="text-xl font-semibold">Search Criteria</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Configure the roles, companies, and context used for job scraping and message generation.
+        </p>
+      </div>
 
       {/* ── CV Upload ─────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-gradient-to-br from-primary/5 to-background p-5 space-y-4">
