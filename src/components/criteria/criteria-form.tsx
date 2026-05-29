@@ -151,7 +151,7 @@ export default function CriteriaForm() {
               title="Import from CV"
               description="Upload your PDF and we'll extract your skills, experience and suggest job titles."
             />
-            <CvUpload onExtracted={handleCvExtracted} />
+            <CvUpload onExtracted={handleCvExtracted} model={form.watch("model")} />
           </SectionCard>
 
           {/* Target Role */}

@@ -18,6 +18,6 @@ export const criteriaRouter = createTRPCRouter({
   extractFromCv: protectedProcedure
     .input(extractFromCvSchema)
     .mutation(async ({ input }) => {
-      return extractCvFromUrl(input.cvUrl);
+      return extractCvFromUrl(input.cvUrl, input.model);
     }),
 });

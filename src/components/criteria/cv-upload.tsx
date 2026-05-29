@@ -12,9 +12,10 @@ const { useUploadThing } = generateReactHelpers<OurFileRouter>();
 
 interface CvUploadProps {
   onExtracted: (data: ExtractedCvData) => void;
+  model?: string;
 }
 
-export default function CvUpload({ onExtracted }: CvUploadProps) {
+export default function CvUpload({ onExtracted, model }: CvUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -45,7 +46,7 @@ export default function CvUpload({ onExtracted }: CvUploadProps) {
     const url = uploaded?.[0]?.url;
     if (!url) return;
 
-    const data = await extractFromCv.mutateAsync({ cvUrl: url });
+    const data = await extractFromCv.mutateAsync({ cvUrl: url, model });
     onExtracted(data);
     setFile(null);
   }

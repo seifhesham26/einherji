@@ -25,7 +25,7 @@ const openaiClient = env.OPENAI_API_KEY
   : null;
 
 // gpt-* models go direct to OpenAI if a key is present, else fall back to OpenRouter
-function getClient(model: string): OpenAI {
+export function getClient(model: string): OpenAI {
   const isOpenAIModel = model.startsWith("gpt-") || model.startsWith("o1-") || model.startsWith("o3-");
   if (isOpenAIModel && openaiClient) return openaiClient;
   return openrouterClient;

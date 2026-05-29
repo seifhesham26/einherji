@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import { env } from "@/lib/env";
 import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
 
+import { getClient } from "@/lib/ai/client";
+
 export interface ExtractedCvData {
   skills: string[];
   elevatorPitch: string;
@@ -9,16 +11,7 @@ export interface ExtractedCvData {
   suggestedTitles: string[];
 }
 
-const openrouterClient = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: env.OPENROUTER_API_KEY,
-  defaultHeaders: {
-    "HTTP-Referer": env.NEXT_PUBLIC_APP_URL,
-    "X-Title": "AI Job Hunter",
-  },
-});
-
-export async function extractCvFromUrl(cvUrl: string): Promise<ExtractedCvData> {
+export async function extractCvFromUrl(cvUrl: string, model: string = DEFAULT_MODEL): Promise<ExtractedCvData> {
   const { extractText } = await import("unpdf");
 
   const response = await fetch(cvUrl);
@@ -32,8 +25,10 @@ export async function extractCvFromUrl(cvUrl: string): Promise<ExtractedCvData> 
     return { skills: [], elevatorPitch: "", resumeText: "", suggestedTitles: [] };
   }
 
-  const completion = await openrouterClient.chat.completions.create({
-    model: DEFAULT_MODEL,
+  const client = getClient(model);
+
+  const completion = await client.chat.completions.create({
+    model: model,
     max_tokens: 1000,
     messages: [
       {
