@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const AVAILABLE_MODELS = [
   // ── Free (via OpenRouter) ───────────────────────────────────────────────────
-  { id: "google/gemini-2.0-flash-exp:free", name: "Gemini 2.0 Flash — Free (OpenRouter)" },
+  { id: "google/gemini-2.5-flash:free", name: "Gemini 2.5 Flash — Free (OpenRouter)" },
   { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B — Free (OpenRouter)" },
   { id: "mistralai/mistral-nemo:free", name: "Mistral Nemo — Free (OpenRouter)" },
   // ── OpenAI (direct — needs OPENAI_API_KEY; new accounts get free credits) ──
@@ -13,7 +13,7 @@ export const AVAILABLE_MODELS = [
   { id: "anthropic/claude-sonnet-4-6", name: "Claude Sonnet — Paid (OpenRouter)" },
 ] as const;
 
-export const DEFAULT_MODEL = "google/gemini-2.0-flash-exp:free";
+export const DEFAULT_MODEL = "google/gemini-2.5-flash:free";
 
 export const extractFromCvSchema = z.object({
   cvUrl: z.string().url(),

@@ -88,7 +88,7 @@ export const criteria = pgTable("criteria", {
   elevatorPitch: text("elevator_pitch"),
 
   // AI model used for message generation — selectable in the criteria form
-  model: text("model").default("google/gemini-2.0-flash-exp:free"),
+  model: text("model").default("google/gemini-2.5-flash:free"),
 
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
