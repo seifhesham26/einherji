@@ -125,7 +125,7 @@ export default function CvUpload({ onExtracted, model }: CvUploadProps) {
 
       {extractFromCv.isError && (
         <p className="text-xs text-destructive">
-          Failed to extract CV data. Please try again or fill in manually.
+          {extractFromCv.error?.message || "Failed to extract CV data. Please try again or fill in manually."}
         </p>
       )}
     </div>

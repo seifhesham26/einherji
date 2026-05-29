@@ -27,13 +27,15 @@ export async function extractCvFromUrl(cvUrl: string, model: string = DEFAULT_MO
 
   const client = getClient(model);
 
-  const completion = await client.chat.completions.create({
-    model: model,
-    max_tokens: 1000,
-    messages: [
-      {
-        role: "system",
-        content: `You are a CV parser. Extract structured data from CV text.
+  let completion;
+  try {
+    completion = await client.chat.completions.create({
+      model: model,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "system",
+          content: `You are a CV parser. Extract structured data from CV text.
 Return ONLY a valid JSON object — no markdown, no explanation, just the JSON.
 Schema:
 {
@@ -42,13 +44,25 @@ Schema:
   "resumeText": string,         // Cleaned up full resume text, keep achievements and numbers
   "suggestedTitles": string[]   // 3-5 job titles this person would be a strong fit for
 }`,
-      },
-      {
-        role: "user",
-        content: `Parse this CV:\n\n${rawText.slice(0, 6000)}`,
-      },
-    ],
-  });
+        },
+        {
+          role: "user",
+          content: `Parse this CV:\n\n${rawText.slice(0, 6000)}`,
+        },
+      ],
+    });
+  } catch (error: any) {
+    console.error("AI API Error:", error);
+    const msg = error.message || String(error);
+    if (msg.includes("429") || msg.includes("rate limit") || msg.includes("Provider returned error")) {
+      throw new Error(`The AI provider is currently overloaded or rate-limiting requests. Please wait a moment and try again, or select a different model in the settings.`);
+    } else if (msg.includes("404") || msg.includes("No endpoints found")) {
+      throw new Error(`The selected AI model (${model}) is currently unavailable or deprecated. Please select a different model in the settings.`);
+    } else if (msg.includes("402") || msg.includes("credits")) {
+      throw new Error(`Insufficient credits to use this model. Please use a free model or add credits to your OpenRouter/OpenAI account.`);
+    }
+    throw new Error(`AI extraction failed: ${msg}`);
+  }
 
   const content = completion.choices[0]?.message?.content ?? "{}";
   const cleaned = content.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
