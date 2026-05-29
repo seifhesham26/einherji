@@ -1,7 +1,7 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/trpc";
 import { saveCriteriaSchema, extractFromCvSchema } from "./criteria.validators";
 import { fetchActiveCriteria, saveCriteria } from "./criteria.service";
-import { extractCvFromPdf } from "@/lib/cv-parser";
+import { extractCvFromUrl } from "@/lib/cv-parser";
 import { db } from "@/lib/db";
 
 export const criteriaRouter = createTRPCRouter({
@@ -18,6 +18,6 @@ export const criteriaRouter = createTRPCRouter({
   extractFromCv: protectedProcedure
     .input(extractFromCvSchema)
     .mutation(async ({ input }) => {
-      return extractCvFromPdf(input.pdfBase64);
+      return extractCvFromUrl(input.cvUrl);
     }),
 });

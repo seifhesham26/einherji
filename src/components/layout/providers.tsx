@@ -16,7 +16,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000,
+        // Data is fresh for 20 minutes — no refetch until then
+        staleTime: 20 * 60 * 1000,
+        // Never auto-refetch just because the window regained focus
+        refetchOnWindowFocus: false,
+        // Don't poll in the background when the tab is hidden
+        refetchIntervalInBackground: false,
         retry: (failureCount, error) => {
           // Don't retry UNAUTHORIZED — redirect to login instead
           if ((error as { data?: { code?: string } })?.data?.code === "UNAUTHORIZED") return false;
@@ -24,11 +29,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         },
       },
     },
-    // Redirect to login on any UNAUTHORIZED tRPC error
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...(typeof window !== "undefined" && {
-      mutationCache: undefined,
-    }),
   }));
 
   useState(() => {

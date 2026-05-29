@@ -16,7 +16,7 @@ export const AVAILABLE_MODELS = [
 export const DEFAULT_MODEL = "google/gemini-2.0-flash-exp:free";
 
 export const extractFromCvSchema = z.object({
-  pdfBase64: z.string().min(1),
+  cvUrl: z.string().url(),
 });
 
 export const saveCriteriaSchema = z.object({

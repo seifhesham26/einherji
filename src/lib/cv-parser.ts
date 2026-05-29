@@ -19,9 +19,11 @@ const openrouterClient = new OpenAI({
   },
 });
 
-export async function extractCvFromPdf(pdfBase64: string): Promise<ExtractedCvData> {
-  const buffer = Buffer.from(pdfBase64, "base64");
-  const uint8 = new Uint8Array(buffer);
+export async function extractCvFromUrl(cvUrl: string): Promise<ExtractedCvData> {
+  const response = await fetch(cvUrl);
+  if (!response.ok) throw new Error(`Failed to fetch CV: ${response.status}`);
+  const arrayBuffer = await response.arrayBuffer();
+  const uint8 = new Uint8Array(arrayBuffer);
 
   const parser = new PDFParse({ data: uint8 });
   const result = await parser.getText();
@@ -33,7 +35,7 @@ export async function extractCvFromPdf(pdfBase64: string): Promise<ExtractedCvDa
     return { skills: [], elevatorPitch: "", resumeText: "", suggestedTitles: [] };
   }
 
-  const response = await openrouterClient.chat.completions.create({
+  const completion = await openrouterClient.chat.completions.create({
     model: DEFAULT_MODEL,
     max_tokens: 1000,
     messages: [
@@ -56,7 +58,7 @@ Schema:
     ],
   });
 
-  const content = response.choices[0]?.message?.content ?? "{}";
+  const content = completion.choices[0]?.message?.content ?? "{}";
   const cleaned = content.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
 
   try {

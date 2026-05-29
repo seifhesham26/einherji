@@ -5,7 +5,9 @@ import { auth } from "@/lib/auth";
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 
 export async function createTRPCContext({ req }: FetchCreateContextFnOptions) {
-  const session = await auth.api.getSession({ headers: req.headers });
+  // Wrap in try/catch so a cold-start DB timeout or auth failure returns null
+  // session instead of crashing the handler and returning HTML 500 to the client
+  const session = await auth.api.getSession({ headers: req.headers }).catch(() => null);
   return { session };
 }
 

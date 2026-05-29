@@ -1,10 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { generateReactHelpers } from "@uploadthing/react";
 import { FileText, Loader2, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useExtractFromCv } from "@/hooks/criteria/useExtractFromCv";
 import type { ExtractedCvData } from "@/lib/cv-parser";
+import type { OurFileRouter } from "@/lib/uploadthing";
+
+const { useUploadThing } = generateReactHelpers<OurFileRouter>();
 
 interface CvUploadProps {
   onExtracted: (data: ExtractedCvData) => void;
@@ -13,8 +17,15 @@ interface CvUploadProps {
 export default function CvUpload({ onExtracted }: CvUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractFromCv = useExtractFromCv();
+
+  const { startUpload } = useUploadThing("cvUploader", {
+    onUploadBegin: () => setIsUploading(true),
+    onClientUploadComplete: () => setIsUploading(false),
+    onUploadError: () => setIsUploading(false),
+  });
 
   function handleFile(selected: File | null) {
     if (!selected || selected.type !== "application/pdf") return;
@@ -30,17 +41,19 @@ export default function CvUpload({ onExtracted }: CvUploadProps) {
   async function handleExtract() {
     if (!file) return;
 
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const uploaded = await startUpload([file]);
+    const url = uploaded?.[0]?.url;
+    if (!url) return;
 
-    const data = await extractFromCv.mutateAsync({ pdfBase64: base64 });
+    const data = await extractFromCv.mutateAsync({ cvUrl: url });
     onExtracted(data);
     setFile(null);
   }
 
+  const isPending = isUploading || extractFromCv.isPending;
+
   return (
     <div className="space-y-3">
-      {/* Drop zone */}
       <div
         onDrop={handleDrop}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -85,31 +98,26 @@ export default function CvUpload({ onExtracted }: CvUploadProps) {
             <div className="text-center">
               <p className="text-sm font-medium">Drop your CV here</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                or click to browse — PDF only
+                or click to browse — PDF only, max 8 MB
               </p>
             </div>
           </>
         )}
       </div>
 
-      {/* Extract button */}
       {file && (
         <Button
           type="button"
           onClick={handleExtract}
-          disabled={extractFromCv.isPending}
+          disabled={isPending}
           className="w-full gap-2"
         >
-          {extractFromCv.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Extracting from CV…
-            </>
+          {isUploading ? (
+            <><Loader2 className="h-4 w-4 animate-spin" />Uploading CV…</>
+          ) : extractFromCv.isPending ? (
+            <><Loader2 className="h-4 w-4 animate-spin" />Extracting from CV…</>
           ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Extract & fill profile
-            </>
+            <><Sparkles className="h-4 w-4" />Extract & fill profile</>
           )}
         </Button>
       )}

@@ -15,6 +15,8 @@ const serverEnvSchema = z.object({
   // Resend — optional; falls back to console.log in dev when unset
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().optional(),
+  // Required for CV upload — add to Vercel before deploying the CV upload feature
+  UPLOADTHING_TOKEN: z.string().optional(),
 });
 
 // ─── Client-safe env vars ─────────────────────────────────────────────────────
