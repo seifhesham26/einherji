@@ -19,21 +19,14 @@ const openrouterClient = new OpenAI({
 });
 
 export async function extractCvFromUrl(cvUrl: string): Promise<ExtractedCvData> {
-  // Dynamic import — pdf-parse uses Node.js native APIs that crash Vercel's
-  // serverless bundler when imported at the top level. Lazy-loading it here
-  // keeps the rest of the tRPC router healthy.
-  const { PDFParse } = await import("pdf-parse");
+  const { extractText } = await import("unpdf");
 
   const response = await fetch(cvUrl);
   if (!response.ok) throw new Error(`Failed to fetch CV: ${response.status}`);
   const arrayBuffer = await response.arrayBuffer();
-  const uint8 = new Uint8Array(arrayBuffer);
 
-  const parser = new PDFParse({ data: uint8 });
-  const result = await parser.getText();
-  await parser.destroy();
-
-  const rawText = result.text.trim();
+  const { text } = await extractText(new Uint8Array(arrayBuffer));
+  const rawText = (Array.isArray(text) ? text.join("\n") : text).trim();
 
   if (!rawText) {
     return { skills: [], elevatorPitch: "", resumeText: "", suggestedTitles: [] };
