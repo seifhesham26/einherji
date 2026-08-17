@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, boolean, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, boolean, pgEnum, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
 import { createId } from "@paralleldrive/cuid2";
 
 // ─── Better Auth Tables ───────────────────────────────────────────────────────
@@ -70,6 +70,56 @@ export const messageStatusEnum = pgEnum("message_status", [
   "edited",
 ]);
 
+// Where a job row came from. "apify" is retained so historical rows stay readable
+// after the Apify integration is removed.
+export const jobSourceEnum = pgEnum("job_source", [
+  // Company job boards — need a company slug, driven by tracked_companies
+  "greenhouse",
+  "lever",
+  "ashby",
+  "workable",
+  "smartrecruiters",
+  "rippling",
+  // Aggregators — keyword-searchable, no company list needed
+  "remoteok",
+  "arbeitnow",
+  "jobicy",
+  "themuse",
+  "himalayas",
+  "weworkremotely",
+  "hackernews",
+  // Freelance / contract marketplaces
+  "freelancer",
+  "hackernews_freelance",
+  // Credentialed — require an API key the user supplies in Settings
+  "adzuna",
+  "reddit",
+  "twitter",
+  "serpapi",
+  // Scraped
+  "linkedin_guest",
+  "apify",
+]);
+
+// What kind of engagement a listing is. Matters now that the app covers both
+// permanent roles and freelance project work.
+export const workTypeEnum = pgEnum("work_type", [
+  "full_time",
+  "part_time",
+  "contract",
+  "freelance",
+  "internship",
+  "unknown",
+]);
+
+export const scrapeStatusEnum = pgEnum("scrape_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
 // ─── Criteria ─────────────────────────────────────────────────────────────────
 // The user's job search preferences. One active record at a time.
 
@@ -102,9 +152,13 @@ export const jobs = pgTable("jobs", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
   userId: text("user_id").notNull(),
 
-  apifyId: text("apify_id"),
+  source: jobSourceEnum("source").notNull().default("apify"),
+  // NOT NULL matters: Postgres treats NULLs as distinct in unique indexes, so a
+  // nullable id would silently defeat the dedupe below and duplicate every scrape.
+  sourceJobId: text("source_job_id").notNull(),
   title: text("title").notNull(),
   company: text("company").notNull(),
+  companyUrl: text("company_url"),
   companySize: text("company_size"),
   location: text("location"),
   salary: text("salary"),
@@ -112,11 +166,21 @@ export const jobs = pgTable("jobs", {
   jobUrl: text("job_url").notNull(),
   postedAt: timestamp("posted_at"),
 
+  workType: workTypeEnum("work_type").notNull().default("unknown"),
+  isRemote: boolean("is_remote"),
+  tags: text("tags").array(),
+  // Some sources (RemoteOK) require visible attribution as a condition of their
+  // API terms. Stored per-job so the UI can render it correctly.
+  attributionText: text("attribution_text"),
+  attributionUrl: text("attribution_url"),
+
   isProcessed: boolean("is_processed").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
-  // Deduplicate per user — same job can appear for different users
-  uniqueIndex("jobs_user_apify_idx").on(table.userId, table.apifyId),
+  // Deduplicate per user — the same job can legitimately appear for different users,
+  // and the same id can repeat across sources.
+  uniqueIndex("jobs_user_source_id_idx").on(table.userId, table.source, table.sourceJobId),
+  index("jobs_user_processed_idx").on(table.userId, table.isProcessed),
 ]);
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
@@ -159,9 +223,84 @@ export const userSettings = pgTable("user_settings", {
   // Personal Apify API token — overrides the server-wide APIFY_API_TOKEN env var
   apifyApiToken: text("apify_api_token"),
 
+  // Which scrapers to run. Defaults to apify so existing users are unaffected
+  // until they opt in to the self-hosted sources.
+  jobSources: text("job_sources").array().notNull().default(["apify"]),
+
+  // Optional unblocking proxy (ScraperAPI, ScrapingBee, Zyte…). Sites that serve
+  // a JS shell or block datacenter IPs — Indeed, Glassdoor, Wellfound — are only
+  // attempted when one of these is configured.
+  scrapingProxyProvider: text("scraping_proxy_provider"),
+  scrapingProxyApiKey: text("scraping_proxy_api_key"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// ─── Tracked Companies ────────────────────────────────────────────────────────
+// Companies whose ATS job board we poll directly. ATS APIs are keyed by slug —
+// they can't be searched blind — so the user's target list is what drives them.
+
+export const trackedCompanies = pgTable("tracked_companies", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  name: text("name").notNull(),
+  careersUrl: text("careers_url"),
+
+  // Resolved by detect-ats, or entered by hand. Null means "not resolved yet".
+  atsProvider: jobSourceEnum("ats_provider"),
+  atsSlug: text("ats_slug"),
+
+  lastCheckedAt: timestamp("last_checked_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("tracked_companies_user_name_idx").on(table.userId, table.name),
+]);
+
+// ─── Source Credentials ───────────────────────────────────────────────────────
+// Per-user API keys for sources that need them. Kept out of user_settings because
+// each source needs a different shape (bearer token vs app id + secret vs both).
+//
+// NOTE: stored in plaintext today, same as user_settings.apifyApiToken. See
+// AUDIT.md M10 — these should be encrypted at rest before real users arrive.
+
+export const sourceCredentials = pgTable("source_credentials", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  source: jobSourceEnum("source").notNull(),
+  // Shape varies by source: { apiKey }, { appId, apiKey }, { clientId, clientSecret }…
+  credentials: jsonb("credentials").notNull().$type<Record<string, string>>(),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("source_credentials_user_source_idx").on(table.userId, table.source),
+]);
+
+// ─── Scrape Runs ──────────────────────────────────────────────────────────────
+// One row per scrape the user triggers. Gives the UI real progress instead of a
+// spinner, and survives the request that started it.
+
+export const scrapeRuns = pgTable("scrape_runs", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  status: scrapeStatusEnum("status").notNull().default("queued"),
+  sources: text("sources").array().notNull(),
+
+  tasksTotal: integer("tasks_total").notNull().default(0),
+  tasksCompleted: integer("tasks_completed").notNull().default(0),
+  jobsFound: integer("jobs_found").notNull().default(0),
+  jobsInserted: integer("jobs_inserted").notNull().default(0),
+
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+}, (table) => [
+  index("scrape_runs_user_started_idx").on(table.userId, table.startedAt),
+]);
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 // AI-generated outreach messages, one per lead

@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Einherji: AI Job Hunter
 
-## Getting Started
+Einherji is an automated AI-powered job search assistant. It scrapes LinkedIn for job postings, identifies hiring managers, and uses AI (via OpenRouter/OpenAI) to generate personalized outreach messages based on your CV.
 
-First, run the development server:
+## Tech Stack
+- **Framework:** Next.js (App Router)
+- **Database:** Neon PostgreSQL + Drizzle ORM
+- **Auth:** Better Auth
+- **AI:** OpenRouter (supports Gemini, Llama, Claude, OpenAI)
+- **Scraping:** Apify
+- **File Uploads:** UploadThing
+
+---
+
+## 🚀 Setup Guide
+
+### 1. Clone & Install
+```bash
+git clone <your-repo-url>
+cd einherji
+npm install
+```
+
+### 2. Environment Variables
+Rename `.env.local.example` to `.env.local` (or create a new `.env.local` file) and fill in the following keys:
+
+#### Database (Neon)
+1. Go to [Neon.tech](https://neon.tech) and create a free project.
+2. Copy the **Connection String** (Postgres URL).
+3. Set `DATABASE_URL=postgresql://...`
+
+#### Authentication (Better Auth)
+1. Generate a random 32-character string (e.g., run `openssl rand -base64 32` in your terminal).
+2. Set `BETTER_AUTH_SECRET=your_random_string`
+3. Set `BETTER_AUTH_URL=http://localhost:3000` (update this for production).
+
+#### File Uploads (UploadThing)
+1. Go to [UploadThing](https://uploadthing.com) and create a project.
+2. Copy the API Token.
+3. Set `UPLOADTHING_TOKEN=your_token_here`
+
+#### AI (OpenRouter)
+1. Go to [OpenRouter.ai](https://openrouter.ai), create an account, and generate an API key.
+2. Set `OPENROUTER_API_KEY=sk-or-...`
+
+#### Scraping (Apify)
+1. Go to [Apify Console](https://console.apify.com).
+2. Create an account and go to **Settings → API & Integrations**.
+3. You can set a global server token `APIFY_API_TOKEN=apify_api_...` in your `.env.local`.
+4. *Note: Users can also provide their personal Apify token inside the app's Settings page!*
+
+---
+
+### 3. Database Setup
+Once your `DATABASE_URL` is configured, push the database schema to Neon:
+
+```bash
+npx drizzle-kit push
+```
+
+### 4. Run the App
+Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+Visit `http://localhost:3000` in your browser.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Sign up/Login** via the UI.
+2. Go to **Settings** and ensure your Apify token is saved.
+3. Go to **Criteria** and upload your CV to auto-extract skills, or enter them manually.
+4. Click **Start Job Scraping** (or check the Jobs/Leads pages) to automatically find jobs matching your criteria!

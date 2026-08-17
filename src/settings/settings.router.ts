@@ -1,7 +1,16 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/trpc";
 import { db } from "@/lib/db";
-import { updateProfileSchema, updateIntegrationsSchema } from "./settings.validators";
-import { getUserSettings, updateProfile, updateIntegrations } from "./settings.service";
+import {
+  updateProfileSchema,
+  updateIntegrationsSchema,
+  updateJobSourcesSchema,
+} from "./settings.validators";
+import {
+  getUserSettings,
+  updateProfile,
+  updateIntegrations,
+  updateJobSources,
+} from "./settings.service";
 
 export const settingsRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx }) => {
@@ -18,5 +27,11 @@ export const settingsRouter = createTRPCRouter({
     .input(updateIntegrationsSchema)
     .mutation(async ({ input, ctx }) => {
       return updateIntegrations(db, ctx.session.user.id, input);
+    }),
+
+  updateJobSources: protectedProcedure
+    .input(updateJobSourcesSchema)
+    .mutation(async ({ input, ctx }) => {
+      return updateJobSources(db, ctx.session.user.id, input);
     }),
 });

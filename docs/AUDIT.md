@@ -1,0 +1,640 @@
+# Einherji — Code Audit & Opinion
+
+**Date:** 2026-08-17
+**Reviewed at commit:** `5d16c4d`
+**Reviewer:** Claude (Opus 5)
+
+This is an honest, unvarnished review of the project as it stands. Every finding below was verified against the actual code — not guessed. Where I could prove something with a build, a lint run, or the bundled Next.js docs, I did, and I say so.
+
+---
+
+## Verdict up front
+
+The architecture is genuinely good. The domain-first onion structure (`validators → db → service → router`) is applied consistently across all five domains, the tRPC wiring is clean, and the UI is well beyond typical self-study quality. `npx tsc --noEmit` passes with zero errors. `npx next build` succeeds.
+
+**But the app is not secure, and the core feature has never been proven to work.**
+
+Two things dominate everything else:
+
+1. **The auth middleware is a no-op.** A one-character logic bug means it never blocks anyone, ever.
+2. **Four tRPC procedures have no ownership check.** Any logged-in user can read and modify any other user's data by guessing an ID.
+
+Beyond that, the Apify scraping layer — the feature the entire product is named after — is written against an actor input schema that was never verified, with the response force-cast through `as unknown as`. If those field names are wrong, the first real scrape throws a database NOT NULL violation.
+
+Fix the security issues before this touches a real user. Fix the Apify layer before you believe any of it works.
+
+---
+
+## Severity legend
+
+| | Meaning |
+|---|---|
+| 🔴 **Critical** | Exploitable now, or the feature is broken. Fix before any deploy. |
+| 🟠 **High** | Will cause data loss, wrong behavior, or real cost. Fix soon. |
+| 🟡 **Medium** | Correctness or maintenance debt. Fix when you touch the area. |
+| 🔵 **Low** | Polish, consistency, nice-to-have. |
+
+---
+
+# 🔴 Critical
+
+## C1 — The auth middleware never runs its check
+
+`middleware.ts:14-17`
+
+```ts
+const PUBLIC_PATHS = ["/login", "/register", "/verify-email", "/api/auth", "/"];
+
+if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  return NextResponse.next();
+}
+```
+
+`"/"` is in the list, and **every** pathname starts with `"/"`. So `.some()` is always `true`, the function always returns early, and `auth.api.getSession` is never reached. The redirect-to-login below it is dead code.
+
+The `isLandingPage` helper right above it is defined and never called — probably the leftover of the correct approach.
+
+**Why it hasn't bitten you yet:** `protectedProcedure` still guards the tRPC layer, so the *data* is safe. But every dashboard page shell renders for anonymous visitors — they see the full authenticated layout with empty/erroring panels instead of a login redirect.
+
+**Fix:**
+
+```ts
+const PUBLIC_PREFIXES = ["/login", "/register", "/verify-email", "/api/auth"];
+
+const isPublic =
+  pathname === "/" || PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+if (isPublic) return NextResponse.next();
+```
+
+---
+
+## C2 — Four procedures let any user touch any other user's rows (IDOR)
+
+This is the most serious finding. The `protectedProcedure` middleware proves you are *someone*, but four procedures never check you are *the right someone*. `ctx.session.user.id` is available and simply not used.
+
+### C2a — `leads.update`
+
+`src/leads/leads.router.ts:14-18` → `leads.service.ts:11` → `leads.db.ts:35`
+
+```ts
+update: protectedProcedure
+  .input(updateLeadSchema)
+  .mutation(async ({ input }) => {   // ← ctx destructured away entirely
+    return patchLead(db, input);
+  }),
+```
+
+```ts
+// leads.db.ts
+.where(eq(leads.id, id))   // ← no userId
+```
+
+Any authenticated user can change the status, notes, and follow-up date of **any lead in the database**.
+
+### C2b — `messages.approve`
+
+`src/messages/messages.router.ts:26-30` → `messages.service.ts:52` → `messages.db.ts:58`
+
+Same shape — `ctx` is not destructured. `approveMessage` filters on `messageId` alone. Worse, it then calls `setLeadMessageSent(db, updated.leadId)`, so approving a stranger's message also flips **their** lead to `message_sent` and stamps `lastContactedAt`.
+
+### C2c — `messages.generate` (data exfiltration)
+
+`src/messages/messages.service.ts:19-22`
+
+```ts
+const [lead, activeCriteria] = await Promise.all([
+  getLeadById(db, input.leadId),      // ← no userId filter
+  getActiveCriteria(db, userId),      // ← correctly scoped
+]);
+```
+
+`userId` is passed to the function and used for criteria — but not for the lead. Supply another user's `leadId` and their hiring manager's name, title, headline, `about` section, and recent posts are fed into an LLM prompt and the generated text is saved to **your** account. That is a cross-tenant read of scraped personal data.
+
+### C2d — `jobs.findManagers`
+
+`src/jobs/jobs.service.ts:44-46`
+
+```ts
+const [job, settings] = await Promise.all([
+  getJobById(db, jobId),                // ← no userId filter
+  getSettingsByUserId(db, userId),
+]);
+```
+
+Same pattern. You can read another user's job row, spend your own Apify credits scraping against it, and then `markJobProcessed(db, jobId)` **writes to their row**, flipping their job to processed.
+
+### The fix
+
+Push `userId` all the way down to the `WHERE` clause. Not a service-layer `if` — the query itself:
+
+```ts
+// leads.db.ts
+export async function getLeadById(db: Database, userId: string, leadId: string) {
+  const [lead] = await db
+    .select()
+    .from(leads)
+    .where(and(eq(leads.id, leadId), eq(leads.userId, userId)))
+    .limit(1);
+  return lead ?? null;
+}
+
+export async function updateLead(db: Database, userId: string, updateData: UpdateLeadInput) {
+  // ...
+  .where(and(eq(leads.id, updateData.id), eq(leads.userId, userId)))
+}
+```
+
+Apply the same to `getJobById`, `markJobProcessed`, and `approveMessage`. Then thread `ctx.session.user.id` through every router that currently drops it.
+
+**Worth doing once:** make `userId` a *required first argument* on every `.db.ts` function that touches a user-scoped table. Then forgetting it becomes a TypeScript error rather than a silent vulnerability. That single convention would have prevented all four of these.
+
+---
+
+## C3 — SSRF: the CV parser fetches any URL you hand it
+
+`src/criteria/criteria.validators.ts:20` and `src/lib/cv-parser.ts:14-17`
+
+```ts
+export const extractFromCvSchema = z.object({
+  cvUrl: z.string().url(),   // ← any URL at all
+  model: z.string().optional(),
+});
+```
+
+```ts
+const response = await fetch(cvUrl);   // server-side, unrestricted
+```
+
+The only validation is "is this a URL." An authenticated user can point this at `http://169.254.169.254/latest/meta-data/` (cloud instance metadata), at `http://localhost:*`, or at any host inside your network perimeter. The server fetches it and — even when PDF parsing fails — the response status and timing leak information about what is reachable.
+
+**Fix:** the URL should only ever come from your own UploadThing callback, so pin it to that host.
+
+```ts
+const UPLOADTHING_HOSTNAME_SUFFIX = ".ufs.sh";
+
+export const extractFromCvSchema = z.object({
+  cvUrl: z
+    .string()
+    .url()
+    .refine((rawUrl) => {
+      const { protocol, hostname } = new URL(rawUrl);
+      return protocol === "https:" && hostname.endsWith(UPLOADTHING_HOSTNAME_SUFFIX);
+    }, "CV must be an uploaded file"),
+  model: z.string().optional(),
+});
+```
+
+The stronger version: don't accept a URL from the client at all. Store the uploaded file key server-side in `onUploadComplete`, have the client send only that key, and resolve the URL on the server.
+
+---
+
+## C4 — The Apify integration is unverified and will crash on bad field names
+
+`src/lib/apify/client.ts:88-100`
+
+```ts
+const run = await apify.actor("curious_coder/linkedin-jobs-scraper").call({
+  searchTerms: input.titles,
+  location: input.locations.join(", "),
+  dateSincePosted: `past ${input.daysPosted ?? 7} days`,
+  companySize: buildCompanySizeFilter(...),
+  salary: input.salaryMin ? `${input.salaryMin}+` : undefined,
+  industry: input.industries?.join(","),
+  maxResults: MAX_JOBS_PER_SCRAPE,
+});
+
+const { items } = await apify.dataset(run.defaultDatasetId).listItems();
+return items as unknown as ScrapedJob[];   // ← zero runtime validation
+```
+
+Three compounding problems:
+
+1. **The input keys were never verified against the actor's real schema.** These read like plausible guesses. Apify actors silently ignore unknown input keys — so a wrong key name doesn't error, it just returns unfiltered or empty results. Your salary/company-size/industry filters may be doing nothing at all right now and you'd have no signal.
+
+2. **`as unknown as ScrapedJob[]` is a lie to the compiler.** It asserts a shape that nothing checked. This is precisely the double-cast that CLAUDE.md's "no `any`, narrow `unknown`" rule exists to prevent.
+
+3. **The lie becomes a crash one layer down.** `jobs.db.ts:26-40` inserts straight into columns declared `.notNull()`:
+
+   ```ts
+   title: job.title,       // NOT NULL
+   company: job.company,   // NOT NULL
+   jobUrl: job.jobUrl,     // NOT NULL
+   ```
+
+   If the actor returns `companyName` instead of `company`, or `link` instead of `jobUrl`, you get a Postgres `null value in column "company" violates not-null constraint` — a raw 500, not a useful error.
+
+**Also:** `apifyId` is nullable, and the dedupe index is `uniqueIndex("jobs_user_apify_idx").on(userId, apifyId)`. Postgres treats `NULL` values as **distinct** in unique indexes. So if the actor's ID field isn't literally `id`, every `apifyId` is `NULL`, no two rows ever conflict, `onConflictDoNothing()` never fires, and **every scrape duplicates every job**.
+
+**Fix — validate at the boundary.** You already have Zod; use it where untrusted data enters:
+
+```ts
+const scrapedJobSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1),
+  company: z.string().min(1),
+  jobUrl: z.string().url(),
+  companySize: z.string().optional(),
+  location: z.string().optional(),
+  salary: z.string().optional(),
+  description: z.string().optional(),
+  postedAt: z.string().optional(),
+});
+
+const { items } = await apify.dataset(run.defaultDatasetId).listItems();
+// Skip malformed records rather than failing the whole scrape
+const parsed = items.map((item) => scrapedJobSchema.safeParse(item));
+return parsed.filter((result) => result.success).map((result) => result.data);
+```
+
+**Before any of that:** do one manual run of both actors in the Apify console, capture the real input schema and one real output record, and write them into `docs/`. Everything in this file is currently built on an assumption nobody has tested.
+
+`findHiringManagers` has the identical problem — `searchQuery`, `companyName`, `limit` are unverified, and `ScrapedProfile` is force-cast the same way. `insertLeads` then writes `firstName` and `company` into NOT NULL columns.
+
+---
+
+# 🟠 High
+
+## H1 — Nothing is ever sent. The product stops at "approve."
+
+Verified by grep: **nothing in `src/` ever writes `sentAt` or sets status to `"sent"`.** The column and the enum value exist; no code path reaches them.
+
+What actually happens on approve (`messages.service.ts:52-58`):
+- Message status → `"approved"` or `"edited"`
+- `setLeadMessageSent()` → lead status → `"message_sent"`, `lastContactedAt` → now
+
+So the lead is marked "Message Sent" when no message was sent. The user still has to manually copy the text into LinkedIn. Your CRM data is describing something that didn't happen, and every downstream metric inherits that lie.
+
+This is a legitimate product decision (LinkedIn automation is a ToS minefield, and I'd push back hard on automating it). But then the UI should say so. Rename the status to `ready_to_send`, add an explicit "Mark as sent" action that stamps `sentAt`, and let the user confirm the thing they actually did.
+
+## H2 — No ownership means no rate limit means no cost ceiling
+
+`jobs.scrape`, `jobs.findManagers`, `messages.generate`, and `criteria.extractFromCv` all call paid third-party APIs. There is no rate limiting, no debounce, no per-user quota, no daily cap.
+
+Anyone with an account can hold the "Scrape Jobs" button and burn your `APIFY_API_TOKEN` fallback and your `OPENROUTER_API_KEY` without limit. CLAUDE.md lists Upstash in the stack; it isn't installed. This is the single highest-value thing to add after the security fixes.
+
+Minimum viable version: `@upstash/ratelimit` on the four expensive procedures, plus a hard daily counter per user.
+
+## H3 — The tRPC client hardcodes an absolute URL from env
+
+`src/components/layout/providers.tsx:50`
+
+```ts
+httpBatchLink({
+  url: `${clientEnv.NEXT_PUBLIC_APP_URL}/api/trpc`,
+})
+```
+
+`NEXT_PUBLIC_*` values are **inlined at build time**. On a Vercel preview deploy the app is served from `einherji-abc123.vercel.app` but the client will POST to whatever `NEXT_PUBLIC_APP_URL` was baked in — production, or `localhost:3000`. Result: cross-origin requests that fail CORS, or a preview build silently writing to your production database.
+
+**Fix:** the tRPC endpoint is same-origin. Use a relative path.
+
+```ts
+httpBatchLink({ url: "/api/trpc", transformer: superjson })
+```
+
+(Keep `NEXT_PUBLIC_APP_URL` for absolute links in emails — that's a legitimate use.)
+
+## H4 — `env.ts` lies to the type system on the client
+
+`src/lib/env.ts:47-53`
+
+```ts
+export const env = typeof window === "undefined"
+  ? validateEnv(serverEnvSchema, process.env as Record<string, string | undefined>)
+  : validateEnv(clientEnvSchema, { ... }) as z.infer<typeof serverEnvSchema>;
+//                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+That cast tells TypeScript the client-side `env` has `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `OPENROUTER_API_KEY`. It does not — they're `undefined` at runtime. So this compiles cleanly in a `"use client"` component:
+
+```ts
+const key = env.OPENROUTER_API_KEY;  // ✅ typechecks, ❌ undefined at runtime
+```
+
+You've done the hard part right — `clientEnv` exists and is correctly typed. The cast defeats it. Remove it and let `env` be server-only:
+
+```ts
+export const env = validateEnv(serverEnvSchema, process.env as Record<string, string | undefined>);
+export const clientEnv = validateEnv(clientEnvSchema, {
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+});
+```
+
+Add `import "server-only"` at the top of a `env.server.ts` and split the two files. Then importing server env from a client component is a build error, which is what you want.
+
+## H5 — Session lookup runs a database query on every single request
+
+`middleware.ts:20` calls `auth.api.getSession({ headers })`, which hits Postgres.
+
+Next.js 16's own docs (`node_modules/next/dist/docs/01-app/02-guides/authentication.md:1031`) are explicit:
+
+> since Proxy runs on every route, including prefetched routes, it's important to only read the session from the cookie (optimistic checks), and **avoid database checks to prevent performance issues**.
+
+Every `<Link>` prefetch, every static asset that slips past the matcher, every navigation — one Neon round trip. On serverless with cold starts this is both slow and expensive.
+
+**Fix:** use Better Auth's cookie-only helper for the optimistic redirect, and keep the real check where it already correctly lives (`protectedProcedure`).
+
+```ts
+import { getSessionCookie } from "better-auth/cookies";
+
+const sessionCookie = getSessionCookie(request);
+if (!sessionCookie) return NextResponse.redirect(new URL("/login", request.url));
+```
+
+**Related:** Next.js 16 renamed Middleware to **Proxy** (`docs/01-app/01-getting-started/16-proxy.md`). `middleware.ts` still works — the build output confirms it, labelling the route `ƒ Proxy (Middleware)` — but the file should be renamed to `proxy.ts` with a `proxy` export. Your own `AGENTS.md` warns about exactly this class of Next 16 drift.
+
+## H6 — No indexes on any `userId` column
+
+`src/lib/db/schema.ts`
+
+Every query in the app filters by `userId`. The only indexes that exist are `jobs (user_id, apify_id)` and the unique constraint on `user_settings.user_id`. `leads`, `messages`, and `criteria` have **none** — every read is a sequential scan of the whole table.
+
+Fine at 10 rows. Not fine at 10,000, and Neon bills by compute time.
+
+```ts
+export const leads = pgTable("leads", { /* ... */ }, (table) => [
+  index("leads_user_id_idx").on(table.userId),
+  index("leads_user_status_idx").on(table.userId, table.status),
+]);
+
+export const messages = pgTable("messages", { /* ... */ }, (table) => [
+  index("messages_user_status_idx").on(table.userId, table.status),
+]);
+
+export const criteria = pgTable("criteria", { /* ... */ }, (table) => [
+  index("criteria_user_active_idx").on(table.userId, table.isActive),
+]);
+```
+
+## H7 — No foreign keys on `userId`, so deleting a user orphans everything
+
+`user_settings.userId` correctly has `.references(() => users.id, { onDelete: "cascade" })`.
+
+`criteria.userId`, `jobs.userId`, `leads.userId`, and `messages.userId` are bare `text("user_id").notNull()` — no reference, no cascade.
+
+Delete a user and their criteria, jobs, leads, and messages stay in the database forever, unreachable and unaccounted for. That's a GDPR problem the moment you have a real user, not just a tidiness problem.
+
+```ts
+userId: text("user_id")
+  .notNull()
+  .references(() => users.id, { onDelete: "cascade" }),
+```
+
+## H8 — Uploaded CVs are on public URLs, and nothing records which one is yours
+
+`src/lib/uploadthing.ts:17-19`
+
+```ts
+.onUploadComplete(async ({ file }) => {
+  return { url: file.url };
+})
+```
+
+Three problems in three lines:
+
+1. **The URL is public.** UploadThing files are served from an unauthenticated CDN URL. A CV contains a full name, phone number, email, and address. Anyone with the link — or anyone brute-forcing keys — has it. Nothing expires.
+2. **Nothing is persisted.** `userId` is returned by the middleware and then thrown away. There is no `cvUrl` column anywhere in the schema. Upload, extract, gone — you can't show the user which CV is active or re-run extraction without re-uploading.
+3. **`file.url` is deprecated.** From `node_modules`: *"This field will be removed in uploadthing v9. Use `ufsUrl` instead."* You're on v7.7.4. Switch to `file.ufsUrl` now — same for `uploaded?.[0]?.url` in `cv-upload.tsx:52`.
+
+Minimum fix: store `file.ufsUrl` and `file.key` on `user_settings`, and delete the file from UploadThing once extraction succeeds. You only need the text.
+
+---
+
+# 🟡 Medium
+
+## M1 — `npm run lint` fails with 11 errors
+
+The build passes because Next 16 + Turbopack doesn't run ESLint during `next build`. Run it directly and it fails:
+
+```
+✖ 17 problems (11 errors, 6 warnings)
+```
+
+- 9 × `react/no-unescaped-entities` — unescaped `'` and `"` in JSX across 6 components
+- 1 × `@typescript-eslint/no-explicit-any` — `cv-parser.ts:54`
+- 1 × `react-hooks/incompatible-library` — `form.watch()` in `criteria-form.tsx`
+- Unused: `useRouter` (`header.tsx:4`), `gte` (`jobs.db.ts:1`), `OpenAI` and `env` (`cv-parser.ts:1-2`)
+
+The `any` is a direct CLAUDE.md violation ("No `any`. Use `unknown` and narrow it."). Most of the rest is `--fix`-able. **This should be a pre-commit hook** — CLAUDE.md lists Husky and lint-staged in the stack and neither is installed.
+
+## M2 — AI errors are detected by substring-matching the message
+
+`src/lib/cv-parser.ts:53-66`
+
+```ts
+} catch (error: any) {
+  const msg = error.message || String(error);
+  if (msg.includes("429") || msg.includes("rate limit") || ...) {
+```
+
+The intent is good — these are genuinely useful user-facing messages, and mapping provider failures to actionable text is the right instinct. The mechanism is fragile: any provider wording change silently breaks the branch and the user gets a raw stack trace.
+
+The OpenAI SDK throws `APIError` with a real `status` field. Use it:
+
+```ts
+import { APIError } from "openai";
+
+} catch (error: unknown) {
+  if (error instanceof APIError) {
+    if (error.status === 429) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "..." });
+    if (error.status === 404) throw new TRPCError({ code: "BAD_REQUEST", message: `Model ${model} is unavailable.` });
+    if (error.status === 402) throw new TRPCError({ code: "BAD_REQUEST", message: "Insufficient credits." });
+  }
+  throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "CV extraction failed." });
+}
+```
+
+Also: this logic belongs in one shared place. `generateOutreachMessage` in `ai/client.ts` has **no** error handling at all — the same rate limit that produces a friendly message during CV parsing produces a raw 500 during message generation.
+
+## M3 — `criteria.extractFromCv` skips the service layer
+
+`src/criteria/criteria.router.ts:16-20` calls `extractCvFromUrl` from `@/lib/cv-parser` directly. Every other procedure in the codebase goes router → service → db. This one goes router → lib.
+
+CLAUDE.md is explicit that a service file owns business logic. Right now "which model to use", "what to do when extraction returns nothing", and "should we persist this" have no home. Add `extractCriteriaFromCv` to `criteria.service.ts` and route through it — that's also where the model fallback and the future "save the URL" logic belong.
+
+## M4 — Saving criteria is two non-atomic writes and grows without bound
+
+`src/criteria/criteria.service.ts:10-14`
+
+```ts
+await deactivateUserCriteria(db, userId);
+return insertCriteria(db, { ...criteriaData, userId });
+```
+
+If the insert fails, the user is left with **zero** active criteria — and `scrapeAndSaveJobs` then throws `"No active criteria found"` on every attempt. The user's only recovery is to re-save the form, with no indication of what went wrong.
+
+Also, nothing ever deletes the deactivated rows. Save the form fifty times and you have fifty rows. That's an accidental audit log — if you want history, make it deliberate with a `criteria_history` table; if you don't, `UPDATE` the existing row.
+
+Wrap both writes in `db.transaction()`. Note: this requires switching from `drizzle-orm/neon-http` to `neon-serverless` (the HTTP driver doesn't support interactive transactions) — a real change worth making before you need it.
+
+## M5 — `insertLeads` has no dedupe, so re-running "Find Managers" duplicates everyone
+
+`src/leads/leads.db.ts:29-32` is a plain insert with no `onConflictDoNothing` and no unique constraint backing it. `findAndSaveManagers` sets `isProcessed = true` afterward, but nothing *prevents* running it again — and the UI has no guard.
+
+Two clicks, two copies of every hiring manager, two Apify charges.
+
+```ts
+uniqueIndex("leads_user_linkedin_idx").on(table.userId, table.linkedinUrl)
+```
+
+Same NULL caveat as C4: if `linkedinUrl` comes back null, the constraint won't fire. Validate it as required at the boundary.
+
+## M6 — Two counters read every row and count in JavaScript
+
+`jobs.db.ts:52-62` and `messages.db.ts:70-84` both do `SELECT *` and then `.filter().length` / `.length` in Node.
+
+```ts
+const allJobs = await db.select().from(jobs).where(eq(jobs.userId, userId));
+const scrapedToday = allJobs.filter((job) => job.createdAt && job.createdAt >= today).length;
+```
+
+Every job row — including full `description` text — crosses the wire to compute a number. Push it into SQL:
+
+```ts
+import { count, sql } from "drizzle-orm";
+
+const [stats] = await db
+  .select({
+    total: count(),
+    scrapedToday: count(sql`CASE WHEN ${jobs.createdAt} >= ${today} THEN 1 END`),
+    processed: count(sql`CASE WHEN ${jobs.isProcessed} THEN 1 END`),
+  })
+  .from(jobs)
+  .where(eq(jobs.userId, userId));
+```
+
+## M7 — `getApprovedTodayCount` undercounts every edited message
+
+`messages.db.ts:76-79` filters `eq(messages.status, "approved")`. But `approveMessage` sets status to `"edited"` when the user tweaked the text — and users tweak the text constantly; that's the whole point of the approval queue.
+
+So the dashboard's "approved today" number silently excludes every message the user actually engaged with. Ironically it undercounts exactly the ones they cared about most.
+
+`"approved"` and `"edited"` are not mutually exclusive states — one is a status, the other is a provenance flag. Use `inArray(messages.status, ["approved", "edited"])` for now; longer term, `status` + a separate `wasEdited: boolean` models this correctly.
+
+## M8 — Side effect during render in `Providers`
+
+`src/components/layout/providers.tsx:35-45`
+
+```ts
+useState(() => {
+  queryClient.getQueryCache().subscribe((event) => { ... });
+});
+```
+
+`useState(initializer)` is being used as "run this once" — but it runs **during render**, and the subscription is never cleaned up. React may invoke a render function twice (StrictMode) or discard the result entirely under concurrent rendering, so you can end up with duplicate or leaked subscribers.
+
+The idea is right — global 401 → redirect is good design. The mechanism should be an effect:
+
+```ts
+useEffect(() => {
+  const unsubscribe = queryClient.getQueryCache().subscribe((event) => { /* ... */ });
+  return unsubscribe;
+}, [queryClient, router]);
+```
+
+## M9 — No migration history
+
+`drizzle.config.ts` sets `out: "./drizzle"`, but that directory doesn't exist. The README instructs `npx drizzle-kit push`, which diffs and mutates the live database with no versioned record.
+
+That's fine for solo development. It is genuinely dangerous the first time you have production data — `push` will happily drop a column to match your schema file, and there is no migration to review, no rollback, and no record of what changed.
+
+Switch to `drizzle-kit generate` + `migrate` and commit the `drizzle/` folder before you have data you care about. This is also a prerequisite for the index and foreign-key changes in H6/H7 — you want those reviewable.
+
+## M10 — Apify tokens are stored in plaintext
+
+`user_settings.apifyApiToken` is a plain `text` column. Anyone with a database read — a leaked `DATABASE_URL`, a SQL injection anywhere, a Neon branch shared for debugging — gets every user's Apify credentials.
+
+Encrypt at rest with a key from env (Node's `crypto.createCipheriv` with AES-256-GCM is enough), and never return the token to the client. `settings.get` currently returns the full row, so the raw token is sitting in the browser's TanStack Query cache right now. Return a masked preview (`apify_api_••••4f2a`) and a `hasApifyToken: boolean` instead.
+
+---
+
+# 🔵 Low
+
+| # | Finding | Location |
+|---|---|---|
+| L1 | `(dashboard)/page.tsx` is dead code. Both it and `app/page.tsx` resolve to `/`; the build emits a single `/` and this file is silently dropped. The comment claims it "defers to `/dashboard`" — it never runs. Delete it. | `src/app/(dashboard)/page.tsx` |
+| L2 | `getJobsStats.managersFound` counts **processed jobs**, not managers. A job can yield 0 or 5 leads. The dashboard number is wrong. Count `leads` instead. | `jobs.db.ts:59` |
+| L3 | `updateLead` can't *clear* `nextActionAt` — `...(nextActionAt && {...})` means a user can set a follow-up but never remove one. Use `!== undefined` and accept `null`. | `leads.db.ts:39` |
+| L4 | `Header` renders an `<h1>` from `PAGE_TITLES`, and every view renders its own `<h1>` too. Two `<h1>`s per page. Make the header `<h2>` or a `<span>`. | `header.tsx:56` |
+| L5 | `PAGE_TITLES` maps `"/"` → `"Dashboard"`, but `/` is the landing page and isn't in the dashboard layout. Dead entry. | `header.tsx:12` |
+| L6 | Global `staleTime: 20 * 60 * 1000` with `refetchOnWindowFocus: false` — for CRM data edited across tabs, 20 minutes of staleness is a long time. Deliberate invalidation covers the main flows, but consider a shorter default with per-query overrides. | `providers.tsx:20` |
+| L7 | Kanban drag has no optimistic update. The card visually snaps back until the server round-trip completes and the invalidation lands. `onMutate` + `setQueryData` would fix the jank. | `kanban-board.tsx:32` |
+| L8 | `buildCompanySizeFilter` only matches four exact `(min, max)` pairs and returns `""` for everything else. The criteria form uses a **slider** (`companySizeMin: 1, companySizeMax: 5000`), so the filter is almost always empty. Map ranges to LinkedIn's buckets by overlap, not exact equality. | `apify/client.ts:145-153` |
+| L9 | `daysPosted` is in `ScrapeJobsInput` and defaults to 7, but `scrapeAndSaveJobs` never passes it and it isn't in the criteria schema. Either surface it in the form or drop it. | `jobs.service.ts:26-34` |
+| L10 | Components are kebab-case (`lead-card.tsx`); CLAUDE.md's Components section specifies PascalCase (`LeadCard.tsx`). The code is internally consistent and matches shadcn convention — so **update CLAUDE.md**, don't rename 40 files. Just make them agree. | CLAUDE.md |
+| L11 | `AVAILABLE_MODELS` is a hardcoded list that will rot as providers deprecate models — you've already hit this twice per git history (`31bc3a5`, `c719e68`). Consider fetching OpenRouter's `/models` endpoint and caching it. | `criteria.validators.ts:3-16` |
+
+---
+
+# 📄 The `docs/` folder is actively misleading
+
+This one deserves its own section, because stale docs are worse than no docs — they cost you time every time you trust them.
+
+`docs/README.md` and everything under `docs/docs/` describe a **different application** than the one in this repository:
+
+| `docs/` claims | Reality |
+|---|---|
+| Next.js 14 | Next.js 16.2.6 |
+| Auth: "Clerk or NextAuth" | Better Auth |
+| AI: Claude API (`claude-sonnet-4`) direct | OpenRouter, default Llama 3.3 70B free |
+| REST route handlers at `app/api/apify/scrape-jobs/route.ts` etc. | tRPC — none of those routes exist |
+| `lib/claude/client.ts` | `lib/ai/client.ts` |
+| `components/jobs/JobCard.tsx` | `components/jobs/job-card.tsx` |
+| `types/index.ts` | `types/{job,lead,message,criteria}.ts` |
+| No mention of `src/{domain}/` onion structure | The central architectural decision of the codebase |
+
+These read like the original planning documents from before the build, never updated. `07-full-build-prompt.md` in particular will actively mislead any AI agent or contributor who reads it — it describes an architecture you deliberately moved away from.
+
+**Recommendation:** move `docs/docs/` to `docs/archive/` with a header noting it's the pre-build plan, and rewrite `docs/README.md` to describe what actually exists. The `USER_GUIDE.md` and `APIFY_SETUP.md` are worth checking against reality too.
+
+---
+
+# What's genuinely good
+
+Worth stating plainly, because the list above is long and the work here is better than it suggests.
+
+- **The domain-first onion architecture is real and consistent.** All five domains follow `validators → db → service → router` without exception. That is unusually disciplined for a self-study project, and it's why the security fixes above are mechanical rather than a rewrite — there's exactly one place to add each `userId`.
+- **Zod schemas as the source of truth, with types inferred.** Done correctly everywhere. No hand-maintained duplicate interfaces.
+- **`createTRPCContext` wraps `getSession` in `.catch(() => null)`** with a comment explaining that a cold-start DB timeout should produce a null session, not an HTML 500. That's the kind of thing you only write after getting burned — and the comment captures the *why*, exactly as CLAUDE.md asks.
+- **The comment style throughout follows your own standard.** `// Deduplicate per user — same job can appear for different users`, `// Replace existing draft — regeneration shouldn't stack up multiple drafts`. These explain reasoning, not mechanics.
+- **`upsertDraftMessage`** correctly prevents draft pileup on regenerate. Easy to get wrong, handled properly.
+- **The AI prompt engineering is strong.** Explicit negative constraints ("NEVER use generic openers"), a word ceiling, per-template instructions, and a `referral` template that deliberately does *not* ask for a job. That's real domain understanding, not a generic "write a message" prompt.
+- **`getClient(model)` routing** — direct OpenAI when a key exists and the model is `gpt-*`, OpenRouter otherwise — is a clean solution to a genuinely fiddly problem.
+- **The UI is well past prototype quality.** Skeleton loaders, empty states with clear next actions, drag-and-drop kanban, `richColors` toasts, theme toggle, an unverified-email banner that's informative rather than blocking. The auth-error → redirect subscription in `Providers` is a thoughtful touch (even if the mechanism needs fixing).
+- **`tsc --noEmit` is clean and `next build` succeeds.** The type discipline is real — which makes the two `as unknown as` casts stand out all the more, since they're the only places it was abandoned.
+
+---
+
+# Recommended order of work
+
+**Before this touches a real user:**
+
+1. **C1** — fix the middleware `startsWith("/")` bug (one line)
+2. **C2** — add `userId` to all four unscoped queries; make it a required first arg on every `.db.ts` function
+3. **C3** — pin `cvUrl` to the UploadThing host
+4. **H3** — relative tRPC URL
+5. **H4** — remove the `env` cast, split server/client
+
+**Before you trust that scraping works:**
+
+6. **C4** — run both Apify actors manually, capture the real schemas, add Zod validation at the boundary
+7. **M5** — unique constraint on leads
+8. **H2** — rate limit the four paid procedures
+
+**Before you have data you care about:**
+
+9. **M9** — switch to generated migrations
+10. **H6 / H7** — indexes and foreign keys (as a reviewable migration)
+11. **M10** — encrypt the Apify token, stop returning it to the client
+
+**Then the honesty and hygiene pass:**
+
+12. **H1** — decide what "sent" means and make the UI tell the truth
+13. **M1** — fix lint, add Husky + lint-staged
+14. **H8** — persist `ufsUrl`, delete the file after extraction
+15. **M2** — status-code-based AI error handling, shared across both call sites
+16. Rewrite `docs/`
+
+---
+
+*Everything in this document was verified against the code at `5d16c4d`. Build and typecheck were run; lint output is quoted verbatim; the Next.js 16 Proxy behaviour is cited from the docs bundled in `node_modules/next/dist/docs/`. The one thing I could **not** verify is the Apify actor schemas (C4) — that requires a live run, and it's the reason C4 is written as a risk rather than a confirmed bug.*

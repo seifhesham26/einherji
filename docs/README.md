@@ -1,5 +1,13 @@
 # AI Job Hunter — Full System Documentation
 
+> ⚠️ **This document is out of date.** It describes the *pre-build plan*, not the shipped app.
+> Next.js 14 → actually 16.2.6 · Clerk/NextAuth → actually Better Auth · REST route handlers → actually tRPC ·
+> Claude API direct → actually OpenRouter. The `docs/docs/*` files have the same drift.
+>
+> **Current docs:**
+> - **[AUDIT.md](./AUDIT.md)** — accurate review of what actually exists, what's broken, and what to fix first
+> - **[SCRAPER-PLAN.md](./SCRAPER-PLAN.md)** — plan for replacing Apify with a self-hosted scraper
+
 ## Overview
 An automated job hunting system that scrapes LinkedIn jobs via Apify, finds hiring managers, generates personalized outreach messages using Claude AI, lets you approve them, then tracks everything in a CRM.
 

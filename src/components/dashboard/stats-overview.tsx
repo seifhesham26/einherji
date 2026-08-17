@@ -46,6 +46,9 @@ export default function StatsOverview() {
 
   const replies = leads.filter((l) => l.status === "reply_received").length;
   const calls = leads.filter((l) => l.status === "call_scheduled").length;
+  // Counted from leads, not from processed jobs — one job can yield zero or many
+  // managers, so the old job-based count was reporting the wrong number.
+  const managersFound = leads.length;
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -58,7 +61,7 @@ export default function StatsOverview() {
       <StatCard
         icon={<Users className="h-4 w-4 text-emerald-500" />}
         label="Managers found"
-        value={jobStats?.managersFound ?? 0}
+        value={managersFound}
         colorClass="bg-emerald-500/10"
       />
       <StatCard

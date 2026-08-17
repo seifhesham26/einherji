@@ -1,9 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
-import { scrapeLinkedInJobs, findHiringManagers } from "@/lib/apify/client";
-import { getActiveCriteria } from "@/criteria/criteria.db";
+import { findHiringManagers } from "@/lib/apify/client";
 import { getSettingsByUserId } from "@/settings/settings.db";
-import { getAllJobs, getJobById, insertJobs, markJobProcessed } from "./jobs.db";
+import { getAllJobs, getJobById, markJobProcessed } from "./jobs.db";
 import { insertLeads } from "@/leads/leads.db";
 import type { GetJobsInput } from "./jobs.validators";
 
@@ -11,35 +10,16 @@ export async function fetchJobs(db: Database, userId: string, input: GetJobsInpu
   return getAllJobs(db, userId, input.processed);
 }
 
-export async function scrapeAndSaveJobs(db: Database, userId: string) {
-  const [activeCriteria, settings] = await Promise.all([
-    getActiveCriteria(db, userId),
-    getSettingsByUserId(db, userId),
-  ]);
-
-  if (!activeCriteria) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "No active criteria found. Set up your criteria first." });
-  }
-
-  const scraped = await scrapeLinkedInJobs(
-    {
-      titles: activeCriteria.titles,
-      locations: activeCriteria.locations,
-      companySizeMin: activeCriteria.companySizeMin ?? undefined,
-      companySizeMax: activeCriteria.companySizeMax ?? undefined,
-      salaryMin: activeCriteria.salaryMin ?? undefined,
-      industries: activeCriteria.industries ?? undefined,
-    },
-    settings?.apifyApiToken,
-  );
-
-  const inserted = await insertJobs(db, userId, scraped);
-  return { inserted: inserted.length, total: scraped.length };
-}
-
+/**
+ * Finds hiring managers for a job via Apify.
+ *
+ * Still on Apify: LinkedIn profiles are auth-walled, so there's no logged-out
+ * equivalent to the job endpoints the self-hosted scraper uses. See
+ * docs/SCRAPER-PLAN.md Phase 4 for the replacement path.
+ */
 export async function findAndSaveManagers(db: Database, userId: string, jobId: string) {
   const [job, settings] = await Promise.all([
-    getJobById(db, jobId),
+    getJobById(db, userId, jobId),
     getSettingsByUserId(db, userId),
   ]);
 
@@ -65,6 +45,6 @@ export async function findAndSaveManagers(db: Database, userId: string, jobId: s
     about: profile.about,
   })));
 
-  await markJobProcessed(db, jobId);
+  await markJobProcessed(db, userId, jobId);
   return { leads: insertedLeads };
 }

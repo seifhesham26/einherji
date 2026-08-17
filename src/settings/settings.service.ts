@@ -1,6 +1,10 @@
 import type { Database } from "@/lib/db";
 import { getSettingsByUserId, upsertUserSettings } from "./settings.db";
-import type { UpdateIntegrationsInput, UpdateProfileInput } from "./settings.validators";
+import type {
+  UpdateIntegrationsInput,
+  UpdateJobSourcesInput,
+  UpdateProfileInput,
+} from "./settings.validators";
 
 export async function getUserSettings(db: Database, userId: string) {
   return getSettingsByUserId(db, userId);
@@ -16,5 +20,11 @@ export async function updateProfile(db: Database, userId: string, input: UpdateP
 export async function updateIntegrations(db: Database, userId: string, input: UpdateIntegrationsInput) {
   return upsertUserSettings(db, userId, {
     apifyApiToken: input.apifyApiToken,
+  });
+}
+
+export async function updateJobSources(db: Database, userId: string, input: UpdateJobSourcesInput) {
+  return upsertUserSettings(db, userId, {
+    jobSources: input.jobSources,
   });
 }

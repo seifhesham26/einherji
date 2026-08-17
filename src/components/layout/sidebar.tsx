@@ -10,6 +10,7 @@ import {
   MessageSquare,
   KanbanSquare,
   BrainCircuit,
+  Building2,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ import { useSession, signOut } from "@/lib/auth-client";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/criteria", label: "Criteria", icon: Settings },
+  { href: "/companies", label: "Companies", icon: Building2 },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/messages", label: "Messages", icon: MessageSquare },

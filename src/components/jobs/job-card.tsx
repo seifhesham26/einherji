@@ -12,6 +12,31 @@ interface JobCardProps {
   job: Job;
 }
 
+// Short display names — the raw enum values are snake_case and look like internals.
+const SOURCE_LABELS: Record<string, string> = {
+  greenhouse: "Greenhouse",
+  lever: "Lever",
+  ashby: "Ashby",
+  workable: "Workable",
+  smartrecruiters: "SmartRecruiters",
+  rippling: "Rippling",
+  remoteok: "RemoteOK",
+  arbeitnow: "Arbeitnow",
+  jobicy: "Jobicy",
+  themuse: "The Muse",
+  himalayas: "Himalayas",
+  weworkremotely: "WeWorkRemotely",
+  hackernews: "Hacker News",
+  hackernews_freelance: "HN Freelance",
+  freelancer: "Freelancer.com",
+  adzuna: "Adzuna",
+  reddit: "Reddit",
+  twitter: "X",
+  serpapi: "Search",
+  linkedin_guest: "LinkedIn",
+  apify: "Apify",
+};
+
 function CompanyAvatar({ name }: { name: string }) {
   const letter = name[0]?.toUpperCase() ?? "?";
   return (
@@ -72,6 +97,35 @@ export default function JobCard({ job }: JobCardProps) {
             <span>{formatRelativeDate(job.postedAt)}</span>
           </div>
         </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
+          <Badge variant="secondary" className="text-[10px] font-normal">
+            {SOURCE_LABELS[job.source] ?? job.source}
+          </Badge>
+          {job.workType && job.workType !== "unknown" && (
+            <Badge variant="outline" className="text-[10px] font-normal capitalize">
+              {job.workType.replace("_", " ")}
+            </Badge>
+          )}
+          {job.isRemote && (
+            <Badge variant="outline" className="text-[10px] font-normal">
+              Remote
+            </Badge>
+          )}
+        </div>
+
+        {/* Required by some sources' API terms — RemoteOK's access is conditional
+            on a followed link back, so this must not be nofollow. */}
+        {job.attributionText && job.attributionUrl && (
+          <a
+            href={job.attributionUrl}
+            target="_blank"
+            rel="noopener"
+            className="text-[10px] text-muted-foreground hover:text-foreground mt-2 inline-block"
+          >
+            {job.attributionText}
+          </a>
+        )}
       </CardContent>
 
       <CardFooter className="gap-2 pt-0">

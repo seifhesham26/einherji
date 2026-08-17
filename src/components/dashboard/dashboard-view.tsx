@@ -34,7 +34,7 @@ export default function DashboardView() {
         </div>
         <Button
           size="sm"
-          onClick={() => scrapeJobs.mutate()}
+          onClick={() => scrapeJobs.mutate({})}
           disabled={scrapeJobs.isPending}
           className="gap-2 shrink-0"
         >

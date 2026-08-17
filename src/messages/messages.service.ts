@@ -22,7 +22,7 @@ export async function generateAndSaveMessage(db: Database, userId: string, input
   if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
   if (!activeCriteria) throw new TRPCError({ code: "BAD_REQUEST", message: "No active criteria found. Set up your criteria first." });
 
-  const job = lead.jobId ? await getJobById(db, lead.jobId) : null;
+  const job = lead.jobId ? await getJobById(db, userId, lead.jobId) : null;
 
   const messageBody = await generateOutreachMessage({
     jobTitle: job?.title ?? "the role",

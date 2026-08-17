@@ -1,6 +1,6 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/trpc";
 import { getJobsSchema, findManagersSchema } from "./jobs.validators";
-import { fetchJobs, scrapeAndSaveJobs, findAndSaveManagers } from "./jobs.service";
+import { fetchJobs, findAndSaveManagers } from "./jobs.service";
 import { getJobsStats } from "./jobs.db";
 import { db } from "@/lib/db";
 
@@ -15,9 +15,8 @@ export const jobsRouter = createTRPCRouter({
     return getJobsStats(db, ctx.session.user.id);
   }),
 
-  scrape: protectedProcedure.mutation(async ({ ctx }) => {
-    return scrapeAndSaveJobs(db, ctx.session.user.id);
-  }),
+  // Scraping moved to the scraping router, which tracks runs and supports
+  // multiple sources. See scraping.start.
 
   findManagers: protectedProcedure
     .input(findManagersSchema)
