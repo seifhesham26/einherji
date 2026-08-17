@@ -14,8 +14,11 @@ export async function fetchMessages(db: Database, userId: string, input: GetMess
 }
 
 export async function generateAndSaveMessage(db: Database, userId: string, input: GenerateMessageInput) {
+  // Both scoped to userId. The lead lookup wasn't, which meant supplying someone
+  // else's leadId fed their hiring manager's name, headline, about text and
+  // recent posts into an LLM prompt and saved the result to your account.
   const [lead, activeCriteria] = await Promise.all([
-    getLeadById(db, input.leadId),
+    getLeadById(db, userId, input.leadId),
     getActiveCriteria(db, userId),
   ]);
 
@@ -50,10 +53,17 @@ export async function generateAndSaveMessage(db: Database, userId: string, input
   });
 }
 
-export async function approveAndUpdateLead(db: Database, input: ApproveMessageInput) {
-  const updated = await approveMessage(db, input.messageId, input.editedBody);
+export async function approveAndUpdateLead(
+  db: Database,
+  userId: string,
+  input: ApproveMessageInput,
+) {
+  const updated = await approveMessage(db, userId, input.messageId, input.editedBody);
   if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Message not found" });
 
-  await setLeadMessageSent(db, updated.leadId);
+  // Scoped too: approving someone else's message used to flip *their* lead to
+  // message_sent and stamp lastContactedAt. The message is ours by the line
+  // above, so its lead is as well — but the query says so rather than assuming.
+  await setLeadMessageSent(db, userId, updated.leadId);
   return updated;
 }

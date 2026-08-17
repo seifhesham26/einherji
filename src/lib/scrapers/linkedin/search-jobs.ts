@@ -68,8 +68,9 @@ async function* searchLinkedInJobs(
           if (seenInThisRun.has(card.sourceJobId)) continue;
           seenInThisRun.add(card.sourceJobId);
 
-          // Already stored — yield the summary so counts stay honest, but skip
-          // the detail request.
+          // Already stored, so skip the detail request entirely. It isn't yielded
+          // either: the insert would be a no-op against the unique index, and
+          // counting it as "found" would overstate what the run actually did.
           if (context.existingSourceJobIds.has(card.sourceJobId)) continue;
 
           const detail = await fetchJobDetail(card.sourceJobId, context.signal);
@@ -92,7 +93,7 @@ async function* searchLinkedInJobs(
 async function fetchJobDetail(sourceJobId: string, signal: AbortSignal) {
   try {
     const html = await linkedInRateLimiter.schedule(() =>
-      fetchText(`${LINKEDIN_GUEST_BASE}/jobPosting/${sourceJobId}`, {
+      fetchText(`${LINKEDIN_GUEST_BASE}/jobPosting/${encodeURIComponent(sourceJobId)}`, {
         signal,
         referer: "https://www.linkedin.com/jobs",
       }),

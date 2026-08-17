@@ -23,11 +23,20 @@ export async function getJobById(db: Database, userId: string, jobId: string) {
 
 // Loaded once per run so sources can skip the expensive detail fetch for jobs we
 // already hold. Only the id column crosses the wire.
-export async function getExistingSourceJobIds(db: Database, userId: string): Promise<Set<string>> {
+//
+// Scoped to one source on purpose: ids are only unique within a source, and
+// Greenhouse and LinkedIn both use bare numeric ids. Matching across sources
+// would make a LinkedIn job vanish because some unrelated Greenhouse posting
+// happened to share its number.
+export async function getExistingSourceJobIds(
+  db: Database,
+  userId: string,
+  source: ScrapedJob["source"],
+): Promise<Set<string>> {
   const rows = await db
     .select({ sourceJobId: jobs.sourceJobId })
     .from(jobs)
-    .where(eq(jobs.userId, userId));
+    .where(and(eq(jobs.userId, userId), eq(jobs.source, source)));
   return new Set(rows.map((row) => row.sourceJobId));
 }
 

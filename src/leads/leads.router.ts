@@ -12,8 +12,8 @@ export const leadsRouter = createTRPCRouter({
 
   update: protectedProcedure
     .input(updateLeadSchema)
-    .mutation(async ({ input }) => {
-      return patchLead(db, input);
+    .mutation(async ({ input, ctx }) => {
+      return patchLead(db, ctx.session.user.id, input);
     }),
 
   getRecentActivity: protectedProcedure.query(async ({ ctx }) => {

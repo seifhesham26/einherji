@@ -1,3 +1,4 @@
+import { assertSafeUrl } from "./assert-safe-url";
 import { buildRequestHeaders, type RequestHeaderOptions } from "./build-request-headers";
 import { sleep } from "./rate-limiter";
 import { CircuitOpenError, ScrapeError } from "./scrape-error";
@@ -9,37 +10,75 @@ const RETRY_JITTER_MS = 1_000;
 // After this many consecutive 429s from one host we stop asking. A host that has
 // rate-limited us three times in a row is not going to relent within a run.
 const CIRCUIT_BREAK_THRESHOLD = 3;
+// ...but it will relent eventually, so the breaker has to reopen on its own.
+// Without this the guard below throws before reaching the fetch that would reset
+// the counter, and the host stays blocked for the lifetime of the process.
+const CIRCUIT_COOLDOWN_MS = 5 * 60_000;
+// Job feeds are a few megabytes at most. Anything beyond this is a runaway
+// response, and reading it to completion is how a single bad host kills the node.
+const MAX_RESPONSE_BYTES = 12 * 1024 * 1024;
+// A public URL that redirects to 169.254.169.254 is the standard way past a
+// validate-once SSRF guard, so guarded fetches walk redirects by hand.
+const MAX_REDIRECTS = 5;
 
-const consecutiveRateLimitsByHost = new Map<string, number>();
+interface BreakerState {
+  failures: number;
+  openedAt: number;
+}
+
+const breakerStateByHost = new Map<string, BreakerState>();
 
 export interface FetchWithRetryOptions extends RequestHeaderOptions {
   signal?: AbortSignal;
+  // Set for URLs that came from a user. Validates the target — and every redirect
+  // hop — against the private address ranges before connecting.
+  requireSafeUrl?: boolean;
+}
+
+function isCircuitOpen(host: string): boolean {
+  const state = breakerStateByHost.get(host);
+  if (!state || state.failures < CIRCUIT_BREAK_THRESHOLD) return false;
+
+  if (Date.now() - state.openedAt >= CIRCUIT_COOLDOWN_MS) {
+    // Half-open: clear the count and let the next request decide.
+    breakerStateByHost.delete(host);
+    return false;
+  }
+  return true;
+}
+
+function recordRateLimit(host: string): number {
+  const failures = (breakerStateByHost.get(host)?.failures ?? 0) + 1;
+  breakerStateByHost.set(host, { failures, openedAt: Date.now() });
+  return failures;
 }
 
 export async function fetchWithRetry(
   url: string,
   options: FetchWithRetryOptions = {},
 ): Promise<Response> {
-  const host = new URL(url).host;
+  if (options.requireSafeUrl) await assertSafeUrl(url);
 
-  if ((consecutiveRateLimitsByHost.get(host) ?? 0) >= CIRCUIT_BREAK_THRESHOLD) {
-    throw new CircuitOpenError(host);
-  }
+  const host = new URL(url).host;
+  if (isCircuitOpen(host)) throw new CircuitOpenError(host);
 
   let lastStatus = 0;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (options.signal?.aborted) throw new ScrapeError("Scrape cancelled", 0, url);
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers: buildRequestHeaders(options),
-      signal: options.signal,
-      redirect: "follow",
-    });
+    const response = options.requireSafeUrl
+      ? await fetchFollowingSafeRedirects(url, options)
+      : await fetch(url, {
+          method: "GET",
+          headers: buildRequestHeaders(options),
+          signal: options.signal,
+          redirect: "follow",
+        });
 
     if (response.ok) {
-      consecutiveRateLimitsByHost.set(host, 0);
+      breakerStateByHost.delete(host);
+      assertWithinSizeLimit(response, url);
       return response;
     }
 
@@ -49,9 +88,7 @@ export async function fetchWithRetry(
     // soft-rate-limit with 403 rather than 429, and the request succeeds on retry.
     // A genuinely forbidden endpoint just costs us two wasted attempts.
     if (response.status === 429 || response.status === 403) {
-      const failures = (consecutiveRateLimitsByHost.get(host) ?? 0) + 1;
-      consecutiveRateLimitsByHost.set(host, failures);
-      if (failures >= CIRCUIT_BREAK_THRESHOLD) throw new CircuitOpenError(host);
+      if (recordRateLimit(host) >= CIRCUIT_BREAK_THRESHOLD) throw new CircuitOpenError(host);
 
       // Prefer the server's own instruction over our guess.
       await sleep(readRetryAfterMs(response) ?? backoffFor(attempt));
@@ -75,12 +112,79 @@ export async function fetchWithRetry(
   );
 }
 
+// Walks redirects manually so each hop can be re-validated. `redirect: "follow"`
+// would resolve the chain inside undici, where the guard can't see it.
+async function fetchFollowingSafeRedirects(
+  url: string,
+  options: FetchWithRetryOptions,
+): Promise<Response> {
+  let currentUrl = url;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const response = await fetch(currentUrl, {
+      method: "GET",
+      headers: buildRequestHeaders(options),
+      signal: options.signal,
+      redirect: "manual",
+    });
+
+    const location = response.headers.get("location");
+    const isRedirect = response.status >= 300 && response.status < 400 && location;
+    if (!isRedirect) return response;
+
+    currentUrl = new URL(location, currentUrl).toString();
+    await assertSafeUrl(currentUrl);
+  }
+
+  throw new ScrapeError(`Too many redirects from ${url}`, 0, url);
+}
+
+// Checked from the declared length where there is one. Bodies without a
+// Content-Length are capped while streaming in readCappedText.
+function assertWithinSizeLimit(response: Response, url: string): void {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    throw new ScrapeError(
+      `Response from ${url} is too large (${declaredLength} bytes)`,
+      response.status,
+      url,
+    );
+  }
+}
+
+async function readCappedText(response: Response, url: string): Promise<string> {
+  if (!response.body) return response.text();
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let received = 0;
+  let text = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      received += value.byteLength;
+      if (received > MAX_RESPONSE_BYTES) {
+        throw new ScrapeError(`Response from ${url} is too large`, response.status, url);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    // Releases the socket even when we bail out early on an oversized body.
+    await reader.cancel().catch(() => undefined);
+  }
+
+  return text + decoder.decode();
+}
+
 export async function fetchJson<T = unknown>(
   url: string,
   options: FetchWithRetryOptions = {},
 ): Promise<T> {
   const response = await fetchWithRetry(url, { ...options, accept: "application/json" });
-  return response.json() as Promise<T>;
+  return JSON.parse(await readCappedText(response, url)) as T;
 }
 
 export async function fetchText(
@@ -88,7 +192,7 @@ export async function fetchText(
   options: FetchWithRetryOptions = {},
 ): Promise<string> {
   const response = await fetchWithRetry(url, options);
-  return response.text();
+  return readCappedText(response, url);
 }
 
 function backoffFor(attempt: number): number {
@@ -112,5 +216,5 @@ function readRetryAfterMs(response: Response): number | null {
 // Exposed for tests — the breaker state is module-level and would otherwise leak
 // between cases.
 export function resetCircuitBreakers(): void {
-  consecutiveRateLimitsByHost.clear();
+  breakerStateByHost.clear();
 }

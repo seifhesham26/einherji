@@ -1,4 +1,5 @@
 import { pgTable, text, integer, timestamp, boolean, pgEnum, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 
 // ─── Better Auth Tables ───────────────────────────────────────────────────────
@@ -125,7 +126,7 @@ export const scrapeStatusEnum = pgEnum("scrape_status", [
 
 export const criteria = pgTable("criteria", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
-  userId: text("user_id").notNull(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
 
   titles: text("titles").array().notNull(),
   salaryMin: integer("salary_min"),
@@ -143,14 +144,18 @@ export const criteria = pgTable("criteria", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // getActiveCriteria filters on exactly this pair, and it runs on nearly every
+  // scrape and message generation. The userId prefix also serves deactivate.
+  index("criteria_user_active_idx").on(table.userId, table.isActive),
+]);
 
 // ─── Jobs ─────────────────────────────────────────────────────────────────────
 // Scraped from LinkedIn via Apify
 
 export const jobs = pgTable("jobs", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
-  userId: text("user_id").notNull(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
 
   source: jobSourceEnum("source").notNull().default("apify"),
   // NOT NULL matters: Postgres treats NULLs as distinct in unique indexes, so a
@@ -188,8 +193,12 @@ export const jobs = pgTable("jobs", {
 
 export const leads = pgTable("leads", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
-  userId: text("user_id").notNull(),
-  jobId: text("job_id").references(() => jobs.id),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Set null, not cascade: a hiring manager is still a real contact after the
+  // posting they came from is gone. It also unblocks deleteJobsBySource, which
+  // currently throws a foreign key violation whenever a lead references a job
+  // being removed — reachable today by toggling a source off after Find Managers.
+  jobId: text("job_id").references(() => jobs.id, { onDelete: "set null" }),
 
   firstName: text("first_name").notNull(),
   lastName: text("last_name"),
@@ -208,7 +217,16 @@ export const leads = pgTable("leads", {
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Every lead query starts with userId. status is included because getAllLeads
+  // filters on it, and a leading-column prefix still serves the ones that don't.
+  index("leads_user_status_idx").on(table.userId, table.status),
+  // getOverdueFollowUps: where userId and nextActionAt <= now, ordered by it.
+  index("leads_user_next_action_idx").on(table.userId, table.nextActionAt),
+  // Not for reads — this is the referencing side of leads.job_id. Without it,
+  // deleting jobs (deleteJobsBySource does, per source) scans this whole table.
+  index("leads_job_idx").on(table.jobId),
+]);
 
 // ─── User Settings ────────────────────────────────────────────────────────────
 // Per-user configuration: profile extras + integration keys
@@ -300,6 +318,13 @@ export const scrapeRuns = pgTable("scrape_runs", {
   finishedAt: timestamp("finished_at"),
 }, (table) => [
   index("scrape_runs_user_started_idx").on(table.userId, table.startedAt),
+  // One live run per user, enforced by the database rather than by a read before
+  // the insert. Double-clicking "Scrape" fires two mutations milliseconds apart —
+  // exactly the window a check-then-insert guard misses — and two runs means
+  // double the requests to the same boards from the same IP.
+  uniqueIndex("scrape_runs_one_active_per_user_idx")
+    .on(table.userId)
+    .where(sql`${table.status} = 'running'`),
 ]);
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
@@ -307,9 +332,10 @@ export const scrapeRuns = pgTable("scrape_runs", {
 
 export const messages = pgTable("messages", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
-  userId: text("user_id").notNull(),
-  leadId: text("lead_id").references(() => leads.id).notNull(),
-  jobId: text("job_id").references(() => jobs.id),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Cascade because leadId is NOT NULL — a message with no lead can't exist.
+  leadId: text("lead_id").references(() => leads.id, { onDelete: "cascade" }).notNull(),
+  jobId: text("job_id").references(() => jobs.id, { onDelete: "set null" }),
 
   body: text("body").notNull(),
   templateUsed: text("template_used"),
@@ -320,4 +346,11 @@ export const messages = pgTable("messages", {
   editedBody: text("edited_body"),
 
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // getMessages and getApprovedTodayCount both filter on this pair.
+  index("messages_user_status_idx").on(table.userId, table.status),
+  // getDraftForLead, which runs before every message generation. Also the
+  // referencing side of messages.lead_id, so it keeps lead deletes off a scan.
+  index("messages_user_lead_idx").on(table.userId, table.leadId),
+  index("messages_lead_idx").on(table.leadId),
+]);

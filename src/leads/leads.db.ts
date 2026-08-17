@@ -11,8 +11,15 @@ export async function getAllLeads(db: Database, userId: string, status?: LeadSta
   return db.select().from(leads).where(baseWhere).orderBy(desc(leads.createdAt));
 }
 
-export async function getLeadById(db: Database, leadId: string) {
-  const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
+// userId is a required argument on every function in this file, not an optional
+// extra — forgetting it then becomes a type error rather than a silent
+// cross-tenant read. All four IDOR findings in docs/AUDIT.md were this mistake.
+export async function getLeadById(db: Database, userId: string, leadId: string) {
+  const [lead] = await db
+    .select()
+    .from(leads)
+    .where(and(eq(leads.id, leadId), eq(leads.userId, userId)))
+    .limit(1);
   return lead ?? null;
 }
 
@@ -30,7 +37,7 @@ export async function insertLeads(db: Database, userId: string, leadsData: {
   return db.insert(leads).values(leadsData.map((lead) => ({ ...lead, userId }))).returning();
 }
 
-export async function updateLead(db: Database, updateData: UpdateLeadInput) {
+export async function updateLead(db: Database, userId: string, updateData: UpdateLeadInput) {
   const { id, status, notes, nextActionAt } = updateData;
   const [updated] = await db
     .update(leads)
@@ -40,16 +47,16 @@ export async function updateLead(db: Database, updateData: UpdateLeadInput) {
       ...(nextActionAt && { nextActionAt: new Date(nextActionAt) }),
       updatedAt: new Date(),
     })
-    .where(eq(leads.id, id))
+    .where(and(eq(leads.id, id), eq(leads.userId, userId)))
     .returning();
-  return updated;
+  return updated ?? null;
 }
 
-export async function setLeadMessageSent(db: Database, leadId: string) {
+export async function setLeadMessageSent(db: Database, userId: string, leadId: string) {
   await db
     .update(leads)
     .set({ status: "message_sent", lastContactedAt: new Date(), updatedAt: new Date() })
-    .where(eq(leads.id, leadId));
+    .where(and(eq(leads.id, leadId), eq(leads.userId, userId)));
 }
 
 export async function getRecentLeadActivity(db: Database, userId: string, limit = 10) {

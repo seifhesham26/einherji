@@ -23,7 +23,7 @@ export const messagesRouter = createTRPCRouter({
 
   approve: protectedProcedure
     .input(approveMessageSchema)
-    .mutation(async ({ input }) => {
-      return approveAndUpdateLead(db, input);
+    .mutation(async ({ input, ctx }) => {
+      return approveAndUpdateLead(db, ctx.session.user.id, input);
     }),
 });

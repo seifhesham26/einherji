@@ -1,8 +1,10 @@
-import OpenAI from "openai";
-import { env } from "@/lib/env";
 import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
+import { assertSafeUrl } from "@/lib/scrapers/http/assert-safe-url";
 
 import { getClient } from "@/lib/ai/client";
+
+// A CV is a document, not a data set. Anything past this is not a CV.
+const MAX_CV_BYTES = 15 * 1024 * 1024;
 
 export interface ExtractedCvData {
   skills: string[];
@@ -14,9 +16,24 @@ export interface ExtractedCvData {
 export async function extractCvFromUrl(cvUrl: string, model: string = DEFAULT_MODEL): Promise<ExtractedCvData> {
   const { extractText } = await import("unpdf");
 
+  // cvUrl arrives from the client and is only checked by z.url(), which accepts
+  // "http://169.254.169.254/…" and "file:///etc/passwd" alike. Without this the
+  // endpoint is an SSRF probe any signed-in user can point at our own network.
+  await assertSafeUrl(cvUrl);
+
   const response = await fetch(cvUrl);
-  if (!response.ok) throw new Error(`Failed to fetch CV: ${response.status}`);
+  // Deliberately vague: echoing the upstream status turns this into a port scanner.
+  if (!response.ok) throw new Error("Couldn't download that CV. Check the link and try again.");
+
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_CV_BYTES) {
+    throw new Error("That file is too large to process.");
+  }
+
   const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > MAX_CV_BYTES) {
+    throw new Error("That file is too large to process.");
+  }
 
   const { text } = await extractText(new Uint8Array(arrayBuffer));
   const rawText = (Array.isArray(text) ? text.join("\n") : text).trim();
@@ -51,9 +68,9 @@ Schema:
         },
       ],
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("AI API Error:", error);
-    const msg = error.message || String(error);
+    const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes("429") || msg.includes("rate limit") || msg.includes("Provider returned error")) {
       throw new Error(`The AI provider is currently overloaded or rate-limiting requests. Please wait a moment and try again, or select a different model in the settings.`);
     } else if (msg.includes("404") || msg.includes("No endpoints found")) {

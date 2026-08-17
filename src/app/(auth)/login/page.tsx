@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { BrainCircuit, CheckCircle2 } from "lucide-react";
 import LoginForm from "@/components/auth/login-form";
 
@@ -64,7 +65,11 @@ export default function LoginPage() {
           </div>
           <span className="font-semibold">AI Job Hunter</span>
         </div>
-        <LoginForm />
+        {/* The form reads the `next` search param, which opts it out of static
+            prerendering unless it sits behind a boundary. */}
+        <Suspense fallback={<div className="w-full max-w-sm h-96" />}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );

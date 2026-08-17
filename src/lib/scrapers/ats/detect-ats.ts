@@ -23,13 +23,15 @@ const ATS_URL_PATTERNS: { provider: AtsProvider; pattern: RegExp }[] = [
 
 // Probing a slug is a bare HEAD-equivalent request; a 404 costs nothing and just
 // means "not this one". Ordered by how common each ATS is among tech employers.
+// Slugs are derived from a user-supplied company name, so they're encoded rather
+// than interpolated raw — otherwise a name containing "/" or "?" rewrites the path.
 const PROBE_URL_BUILDERS: { provider: AtsProvider; buildUrl: (slug: string) => string }[] = [
-  { provider: "greenhouse", buildUrl: (slug) => `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs` },
-  { provider: "ashby", buildUrl: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${slug}` },
-  { provider: "lever", buildUrl: (slug) => `https://api.lever.co/v0/postings/${slug}?mode=json` },
-  { provider: "rippling", buildUrl: (slug) => `https://api.rippling.com/platform/api/ats/v1/board/${slug}/jobs` },
-  { provider: "smartrecruiters", buildUrl: (slug) => `https://api.smartrecruiters.com/v1/companies/${slug}/postings` },
-  { provider: "workable", buildUrl: (slug) => `https://apply.workable.com/api/v1/widget/accounts/${slug}` },
+  { provider: "greenhouse", buildUrl: (slug) => `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs` },
+  { provider: "ashby", buildUrl: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}` },
+  { provider: "lever", buildUrl: (slug) => `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json` },
+  { provider: "rippling", buildUrl: (slug) => `https://api.rippling.com/platform/api/ats/v1/board/${encodeURIComponent(slug)}/jobs` },
+  { provider: "smartrecruiters", buildUrl: (slug) => `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(slug)}/postings` },
+  { provider: "workable", buildUrl: (slug) => `https://apply.workable.com/api/v1/widget/accounts/${encodeURIComponent(slug)}` },
 ];
 
 /**
@@ -58,7 +60,11 @@ async function detectFromCareersPage(
 ): Promise<DetectedAts | null> {
   let html: string;
   try {
-    html = await atsRateLimiter.schedule(() => fetchText(careersUrl, { signal }));
+    // The only URL in the scraper that a user types in freely, so it's the only
+    // one that needs the SSRF guard — see assert-safe-url.ts.
+    html = await atsRateLimiter.schedule(() =>
+      fetchText(careersUrl, { signal, requireSafeUrl: true }),
+    );
   } catch {
     // An unreachable careers page isn't fatal — fall through to slug probing.
     return null;

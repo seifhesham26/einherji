@@ -99,6 +99,65 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
     expect(remoteOkJobs.some((job) => (job.tags?.length ?? 0) > 0)).toBe(true);
   }, 180_000);
 
+  // A partial unique index with a wrong predicate creates cleanly and then does
+  // nothing, so the only way to know it works is to make the database reject a
+  // second run. This is what stops a double-click from doubling our request rate.
+  it("refuses a second running row at the database level", async () => {
+    const { db } = await import("@/lib/db");
+    const { insertScrapeRun, isUniqueViolation, finishScrapeRunIfRunning } = await import(
+      "./scraping.db"
+    );
+
+    const first = await insertScrapeRun(db, testUserId!, {
+      sources: ["remoteok"],
+      tasksTotal: 1,
+    });
+
+    try {
+      const second = await insertScrapeRun(db, testUserId!, {
+        sources: ["remoteok"],
+        tasksTotal: 1,
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(second, "the index let a second running row through").not.toBeNull();
+      // Drizzle wraps the driver error, so the 23505 code sits on `cause` rather
+      // than on the thrown error. Reading only the top level matches nothing.
+      expect(isUniqueViolation(second)).toBe(true);
+    } finally {
+      await finishScrapeRunIfRunning(db, first.id, { status: "completed" });
+    }
+
+    // And once the first run is no longer 'running', the next one is allowed.
+    const third = await insertScrapeRun(db, testUserId!, {
+      sources: ["remoteok"],
+      tasksTotal: 1,
+    });
+    await finishScrapeRunIfRunning(db, third.id, { status: "completed" });
+  }, 60_000);
+
+  // Regression: cancelling wrote "cancelled", then the loop that was being
+  // cancelled finished and overwrote it with "completed".
+  it("does not let a finishing run overwrite a cancellation", async () => {
+    const { db } = await import("@/lib/db");
+    const { insertScrapeRun, cancelScrapeRun, finishScrapeRunIfRunning } = await import(
+      "./scraping.db"
+    );
+
+    const run = await insertScrapeRun(db, testUserId!, {
+      sources: ["remoteok"],
+      tasksTotal: 1,
+    });
+
+    const cancelled = await cancelScrapeRun(db, testUserId!, run.id);
+    expect(cancelled?.status).toBe("cancelled");
+
+    const finished = await finishScrapeRunIfRunning(db, run.id, { status: "completed" });
+    expect(finished?.status).toBe("cancelled");
+  }, 60_000);
+
   it("skips a credentialed source with no key instead of failing the run", async () => {
     const { db } = await import("@/lib/db");
     const { startScrape } = await import("./scraping.service");

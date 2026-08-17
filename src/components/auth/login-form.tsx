@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
+import { resolveDestination } from "./resolve-destination";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -22,6 +23,7 @@ type LoginInput = z.infer<typeof loginSchema>;
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginInput>({
@@ -41,7 +43,7 @@ export default function LoginForm() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(resolveDestination(searchParams.get("next")));
     router.refresh();
   }
 

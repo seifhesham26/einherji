@@ -21,10 +21,13 @@ import type {
 } from "@/lib/scrapers/job-source.types";
 import {
   cancelScrapeRun,
-  finishScrapeRun,
+  failStaleRun,
+  finishScrapeRunIfRunning,
   getLatestScrapeRun,
   getScrapeRunById,
+  getScrapeRunStatus,
   insertScrapeRun,
+  isUniqueViolation,
   recordTaskProgress,
 } from "./scraping.db";
 import type { StartScrapeInput } from "./scraping.validators";
@@ -34,6 +37,12 @@ import type { StartScrapeInput } from "./scraping.validators";
 const MAX_RUN_DURATION_MS = 60_000;
 // Jobs are flushed in batches so a run that hits the budget still leaves results.
 const INSERT_BATCH_SIZE = 20;
+// Past this, a run still marked "running" is assumed dead rather than slow — the
+// serverless process it started in is long gone. Generous multiple of the budget
+// so a genuinely slow run is never killed out from under itself.
+const STALE_RUN_AFTER_MS = MAX_RUN_DURATION_MS * 5;
+// Only the first few failures go in the summary; beyond that it's noise.
+const MAX_REPORTED_ERRORS = 3;
 
 const DEFAULT_SOURCES: JobSourceName[] = [
   "greenhouse",
@@ -70,6 +79,8 @@ export async function cancelRun(db: Database, userId: string, runId: string) {
  * losing the whole run.
  */
 export async function startScrape(db: Database, userId: string, input: StartScrapeInput) {
+  await assertNoRunInFlight(db, userId);
+
   const [activeCriteria, settings, companies] = await Promise.all([
     getActiveCriteria(db, userId),
     getSettingsByUserId(db, userId),
@@ -115,40 +126,116 @@ export async function startScrape(db: Database, userId: string, input: StartScra
     workTypes: (input.workTypes as WorkType[] | undefined) ?? undefined,
   };
 
-  const run = await insertScrapeRun(db, userId, { sources, tasksTotal });
+  // Backstop for the race the check above can't win: two clicks land close enough
+  // together that both read "nothing running" before either inserts.
+  const run = await insertScrapeRun(db, userId, { sources, tasksTotal }).catch((error) => {
+    if (isUniqueViolation(error)) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "A scrape is already running. Wait for it to finish, or cancel it first.",
+      });
+    }
+    throw error;
+  });
 
   const abortController = new AbortController();
   const budgetTimer = setTimeout(() => abortController.abort(), MAX_RUN_DURATION_MS);
+  const taskErrors: string[] = [];
+
+  // Cancelling writes "cancelled" to the row from a different request; this is how
+  // the loop notices. Without it a cancel only changed the row until this run
+  // finished and overwrote it, while the scraping carried on regardless.
+  const wasCancelled = async () => {
+    if ((await getScrapeRunStatus(db, run.id)) !== "cancelled") return false;
+    abortController.abort();
+    return true;
+  };
 
   try {
     for (const company of companiesInScope) {
-      await runBoardTask(db, userId, run.id, company, abortController.signal);
+      if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
+      await runBoardTask(db, userId, run.id, company, abortController.signal, taskErrors);
     }
 
     for (const source of aggregatorSources) {
-      await runAggregatorTask(db, userId, run.id, source, query, abortController.signal);
+      if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
+      await runAggregatorTask(
+        db,
+        userId,
+        run.id,
+        source,
+        query,
+        abortController.signal,
+        taskErrors,
+      );
     }
 
     if (wantsLinkedIn && activeCriteria) {
-      const existingSourceJobIds = await getExistingSourceJobIds(db, userId);
+      if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
+      const existingSourceJobIds = await getExistingSourceJobIds(db, userId, "linkedin_guest");
       await runLinkedInTask(db, userId, run.id, query, existingSourceJobIds, abortController.signal);
     }
 
     // Hitting the time budget isn't a failure — everything found before the cutoff
     // was persisted. Say so explicitly so the user knows there's more to fetch.
-    return finishScrapeRun(db, run.id, {
+    return finishScrapeRunIfRunning(db, run.id, {
       status: "completed",
-      errorMessage: abortController.signal.aborted
-        ? "Stopped at the time limit — run again to continue where this left off."
-        : null,
+      errorMessage: summariseOutcome(abortController.signal.aborted, taskErrors),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scrape failed";
-    await finishScrapeRun(db, run.id, { status: "failed", errorMessage: message });
+    await finishScrapeRunIfRunning(db, run.id, { status: "failed", errorMessage: message });
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
   } finally {
     clearTimeout(budgetTimer);
   }
+}
+
+// Two scrapes at once means double the requests to the same boards from the same
+// IP — the fastest way to get blocked — and double the spend on metered sources.
+async function assertNoRunInFlight(db: Database, userId: string) {
+  const latest = await getLatestScrapeRun(db, userId);
+  if (latest?.status !== "running") return;
+
+  const startedAt = latest.startedAt?.getTime() ?? 0;
+  if (Date.now() - startedAt < STALE_RUN_AFTER_MS) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "A scrape is already running. Wait for it to finish, or cancel it first.",
+    });
+  }
+
+  await failStaleRun(db, latest.id);
+}
+
+/**
+ * Turns the run's outcome into one line for the user.
+ *
+ * Failures used to be swallowed whole, which meant a broken adapter was
+ * indistinguishable from a board with no openings — both showed zero jobs and no
+ * error. Two real bugs hid behind exactly that.
+ */
+function summariseOutcome(hitTimeBudget: boolean, taskErrors: string[]): string | null {
+  const parts: string[] = [];
+
+  if (hitTimeBudget) {
+    parts.push("Stopped at the time limit — run again to continue where this left off.");
+  }
+
+  if (taskErrors.length > 0) {
+    const shown = taskErrors.slice(0, MAX_REPORTED_ERRORS).join("; ");
+    const remaining = taskErrors.length - MAX_REPORTED_ERRORS;
+    parts.push(
+      `${taskErrors.length} source${taskErrors.length === 1 ? "" : "s"} failed: ${shown}` +
+        (remaining > 0 ? ` (and ${remaining} more)` : ""),
+    );
+  }
+
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+function describeError(label: string, error: unknown): string {
+  return `${label} — ${error instanceof Error ? error.message : "unknown error"}`;
 }
 
 async function runBoardTask(
@@ -157,6 +244,7 @@ async function runBoardTask(
   runId: string,
   company: { name: string; atsProvider: string | null; atsSlug: string | null },
   signal: AbortSignal,
+  taskErrors: string[],
 ) {
   if (signal.aborted || !company.atsProvider || !company.atsSlug) {
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
@@ -173,8 +261,10 @@ async function runBoardTask(
       jobsFound: scraped.length,
       jobsInserted: inserted.length,
     });
-  } catch {
-    // A board that's moved or gone shouldn't sink the run.
+  } catch (error) {
+    // A board that's moved or gone shouldn't sink the run — but the reason has to
+    // reach the user, or a broken board looks exactly like an empty one.
+    taskErrors.push(describeError(company.name, error));
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
   }
 }
@@ -186,6 +276,7 @@ async function runAggregatorTask(
   source: JobSourceName,
   query: JobSearchQuery,
   signal: AbortSignal,
+  taskErrors: string[],
 ) {
   if (signal.aborted) {
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
@@ -206,7 +297,8 @@ async function runAggregatorTask(
       jobsFound: scraped.length,
       jobsInserted: inserted.length,
     });
-  } catch {
+  } catch (error) {
+    taskErrors.push(describeError(getSourceDefinition(source)?.name ?? source, error));
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
   }
 }
@@ -257,6 +349,7 @@ function resolveSources(
       : DEFAULT_SOURCES;
 
   // Drop anything the registry doesn't know about, so a stale value left in
-  // user_settings can't break a run.
-  return candidates.filter((source) => getSourceDefinition(source) !== null);
+  // user_settings can't break a run. Deduped too: a repeated source would be
+  // counted twice in tasksTotal and scraped twice for nothing.
+  return [...new Set(candidates)].filter((source) => getSourceDefinition(source) !== null);
 }

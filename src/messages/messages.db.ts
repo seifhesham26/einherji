@@ -47,7 +47,12 @@ export async function upsertDraftMessage(db: Database, userId: string, messageDa
   return inserted;
 }
 
-export async function approveMessage(db: Database, messageId: string, editedBody?: string) {
+export async function approveMessage(
+  db: Database,
+  userId: string,
+  messageId: string,
+  editedBody?: string,
+) {
   const [updated] = await db
     .update(messages)
     .set({
@@ -55,7 +60,7 @@ export async function approveMessage(db: Database, messageId: string, editedBody
       approvedAt: new Date(),
       ...(editedBody && { editedBody }),
     })
-    .where(eq(messages.id, messageId))
+    .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
     .returning();
   return updated ?? null;
 }

@@ -8,6 +8,8 @@ export async function insertScrapeRun(
   userId: string,
   runData: { sources: JobSourceName[]; tasksTotal: number },
 ) {
+  // Can fail on scrape_runs_one_active_per_user_idx if a second run slipped past
+  // the service-level check; the caller turns that into a CONFLICT.
   const [inserted] = await db
     .insert(scrapeRuns)
     .values({
@@ -20,6 +22,26 @@ export async function insertScrapeRun(
   return inserted;
 }
 
+/**
+ * True for a Postgres unique-index violation (SQLSTATE 23505).
+ *
+ * The code is not on the error Drizzle throws — it wraps the driver error in a
+ * DrizzleQueryError and hangs the real NeonDbError off `cause`, so this has to
+ * walk the chain. Checking only the top-level error silently never matches, and
+ * the caller then leaks a 500 carrying the full SQL statement.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  const MAX_CAUSE_DEPTH = 5;
+  let current: unknown = error;
+
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && current; depth++) {
+    if (typeof current === "object" && "code" in current && current.code === "23505") return true;
+    current = typeof current === "object" && "cause" in current ? current.cause : null;
+  }
+
+  return false;
+}
+
 export async function getScrapeRunById(db: Database, userId: string, runId: string) {
   const [run] = await db
     .select()
@@ -27,6 +49,33 @@ export async function getScrapeRunById(db: Database, userId: string, runId: stri
     .where(and(eq(scrapeRuns.id, runId), eq(scrapeRuns.userId, userId)))
     .limit(1);
   return run ?? null;
+}
+
+// Just the status column: polled between tasks so a cancel issued from another
+// request actually stops the loop, rather than being overwritten when it finishes.
+export async function getScrapeRunStatus(
+  db: Database,
+  runId: string,
+): Promise<ScrapeStatus | null> {
+  const [run] = await db
+    .select({ status: scrapeRuns.status })
+    .from(scrapeRuns)
+    .where(eq(scrapeRuns.id, runId))
+    .limit(1);
+  return (run?.status as ScrapeStatus | undefined) ?? null;
+}
+
+// A run still marked "running" blocks new ones. If the process died mid-run the
+// row would block them forever, so a stale one is retired instead.
+export async function failStaleRun(db: Database, runId: string) {
+  await db
+    .update(scrapeRuns)
+    .set({
+      status: "failed",
+      errorMessage: "Run did not finish — the server restarted or timed out.",
+      finishedAt: new Date(),
+    })
+    .where(and(eq(scrapeRuns.id, runId), eq(scrapeRuns.status, "running")));
 }
 
 export async function getLatestScrapeRun(db: Database, userId: string) {
@@ -56,7 +105,9 @@ export async function recordTaskProgress(
     .where(eq(scrapeRuns.id, runId));
 }
 
-export async function finishScrapeRun(
+// Guarded on status: a run the user cancelled mid-flight must not be flipped back
+// to "completed" when the loop it was cancelling finally unwinds.
+export async function finishScrapeRunIfRunning(
   db: Database,
   runId: string,
   outcome: { status: ScrapeStatus; errorMessage?: string | null },
@@ -68,9 +119,21 @@ export async function finishScrapeRun(
       errorMessage: outcome.errorMessage ?? null,
       finishedAt: new Date(),
     })
-    .where(eq(scrapeRuns.id, runId))
+    .where(and(eq(scrapeRuns.id, runId), eq(scrapeRuns.status, "running")))
     .returning();
-  return updated ?? null;
+
+  // Already terminal (cancelled, most likely) — hand back what's actually stored
+  // so the caller reports the real outcome.
+  if (!updated) {
+    const [existing] = await db
+      .select()
+      .from(scrapeRuns)
+      .where(eq(scrapeRuns.id, runId))
+      .limit(1);
+    return existing ?? null;
+  }
+
+  return updated;
 }
 
 export async function cancelScrapeRun(db: Database, userId: string, runId: string) {

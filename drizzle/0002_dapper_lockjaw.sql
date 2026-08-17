@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "scrape_runs_one_active_per_user_idx" ON "scrape_runs" USING btree ("user_id") WHERE "scrape_runs"."status" = 'running';

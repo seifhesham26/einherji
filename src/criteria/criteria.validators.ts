@@ -15,7 +15,15 @@ export const AVAILABLE_MODELS = [
 export const DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 
 export const extractFromCvSchema = z.object({
-  cvUrl: z.string().url(),
+  // Scheme narrowed here, address checked at fetch time by assert-safe-url.ts —
+  // z.url() alone accepts file:// and javascript:.
+  cvUrl: z
+    .string()
+    .url()
+    .refine(
+      (value) => /^https?:$/.test(new URL(value).protocol),
+      "CV URL must start with http:// or https://",
+    ),
   model: z.string().optional(),
 });
 

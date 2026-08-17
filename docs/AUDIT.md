@@ -1,8 +1,10 @@
 # Einherji — Code Audit & Opinion
 
-**Date:** 2026-08-17
+**Date:** 2026-08-17 · **Findings updated:** 2026-08-18
 **Reviewed at commit:** `5d16c4d`
 **Reviewer:** Claude (Opus 5)
+
+> **Status update (2026-08-18): C1, C2 and C3 are closed. C4 is half closed.** The Apify *job* path it describes was replaced by the self-hosted scraper (`docs/SCRAPER-PLAN.md`), which validates every source with Zod at the boundary — but `findHiringManagers` still runs on Apify and still ends in `items as unknown as ScrapedProfile[]`, so the C4 risk is live for the Find Managers flow. The verdict below is preserved as written on 2026-08-17: it describes commit `5d16c4d`, not today's code. Each section carries its own status line.
 
 This is an honest, unvarnished review of the project as it stands. Every finding below was verified against the actual code — not guessed. Where I could prove something with a build, a lint run, or the bundled Next.js docs, I did, and I say so.
 
@@ -38,7 +40,17 @@ Fix the security issues before this touches a real user. Fix the Apify layer bef
 
 # 🔴 Critical
 
-## C1 — The auth middleware never runs its check
+## C1 — The auth middleware never runs its check ✅ FIXED (2026-08-18)
+
+**Resolved.** `"/"` is now an exact match rather than a prefix, and the check uses Better Auth's `getSessionCookie` instead of `auth.api.getSession` — an optimistic cookie read with no database round trip, which is the pattern Better Auth recommends for middleware and which also sidesteps H5. Real validation stays in `protectedProcedure`.
+
+Two things surfaced only once the code actually ran (it never had before):
+
+- **`/api/*` had to be excluded.** With the matcher as written, unauthenticated tRPC calls were answered with a 307 to an HTML login page instead of a 401 JSON body — the client can't parse that. API routes now pass through and answer with their own status codes.
+- **The `next=` param needed an open-redirect guard.** `router.push("//evil.com")` navigates off-site, so `resolveDestination` accepts only single-slash relative paths. Covered by `resolve-destination.test.ts`.
+
+Verified end to end against a running server: all eight protected pages 307 to `/login?next=…`, the four public routes 200, tRPC returns 401 with no cookie, and a forged session cookie gets past the proxy (by design) but is rejected by tRPC.
+
 
 `middleware.ts:14-17`
 
@@ -68,7 +80,12 @@ if (isPublic) return NextResponse.next();
 
 ---
 
-## C2 — Four procedures let any user touch any other user's rows (IDOR)
+## C2 — Four procedures let any user touch any other user's rows (IDOR) ✅ FIXED (2026-08-18)
+
+**Resolved, all four.** C2d (`jobs.findManagers`) was fixed incidentally during the scraper work; C2a, C2b and C2c were fixed here. `userId` is now a required argument on every function in `leads.db.ts` and `messages.db.ts` that touches a user-scoped row, and it is in the `WHERE` clause rather than checked in the service layer. `patchLead` throws `NOT_FOUND` when nothing matches, so the response can't be used to probe for other users' ids.
+
+Proven by `src/server/tenant-isolation.integration.test.ts`, which runs the real services against the real database as the wrong user and asserts both that the call is refused **and** that nothing was written — plus a positive control confirming the owner can still edit their own lead.
+
 
 This is the most serious finding. The `protectedProcedure` middleware proves you are *someone*, but four procedures never check you are *the right someone*. `ctx.session.user.id` is available and simply not used.
 
@@ -150,7 +167,11 @@ Apply the same to `getJobById`, `markJobProcessed`, and `approveMessage`. Then t
 
 ---
 
-## C3 — SSRF: the CV parser fetches any URL you hand it
+## C3 — SSRF: the CV parser fetches any URL you hand it ✅ FIXED (2026-08-18)
+
+**Resolved.** `assertSafeUrl()` (`src/lib/scrapers/http/assert-safe-url.ts`) now guards the fetch: http(s) only, no embedded credentials, and the hostname is resolved and checked against every private, loopback, link-local and metadata range before connecting. The validator narrows the scheme, the upstream status is no longer echoed back (it was a port scanner), and the download is size-capped. Covered by `assert-safe-url.test.ts`.
+
+The same guard was needed for the scraper's careers-URL fetch, which is what prompted writing it — see the note at the end of this section.
 
 `src/criteria/criteria.validators.ts:20` and `src/lib/cv-parser.ts:14-17`
 
@@ -167,7 +188,9 @@ const response = await fetch(cvUrl);   // server-side, unrestricted
 
 The only validation is "is this a URL." An authenticated user can point this at `http://169.254.169.254/latest/meta-data/` (cloud instance metadata), at `http://localhost:*`, or at any host inside your network perimeter. The server fetches it and — even when PDF parsing fails — the response status and timing leak information about what is reachable.
 
-**Fix:** the URL should only ever come from your own UploadThing callback, so pin it to that host.
+**Fix as applied:** pinning to the UploadThing host was the original suggestion, but a general guard turned out to be the better buy — the scraper grew a second user-supplied URL (a company's careers page) that genuinely can point anywhere on the public internet, so it needs address filtering rather than a host allowlist. One guard now covers both. Redirects are re-checked at every hop, because a public URL that 302s to `169.254.169.254` walks straight through a validate-once check.
+
+The original host-pinning suggestion, for reference:
 
 ```ts
 const UPLOADTHING_HOSTNAME_SUFFIX = ".ufs.sh";
@@ -188,7 +211,10 @@ The stronger version: don't accept a URL from the client at all. Store the uploa
 
 ---
 
-## C4 — The Apify integration is unverified and will crash on bad field names
+## C4 — The Apify integration is unverified and will crash on bad field names ⚠️ HALF OPEN (2026-08-18)
+
+**`scrapeLinkedInJobs` is retired** — the self-hosted scraper replaced it and validates every record with Zod (`scrapedJobSchema`). **`findHiringManagers` is unchanged** and still does `items as unknown as ScrapedProfile[]`, so everything below still applies to the Find Managers flow. That's Phase 4 work.
+
 
 `src/lib/apify/client.ts:88-100`
 
@@ -324,6 +350,9 @@ Add `import "server-only"` at the top of a `env.server.ts` and split the two fil
 
 ## H5 — Session lookup runs a database query on every single request
 
+**Largely addressed (2026-08-18) as a side effect of C1:** the proxy now uses `getSessionCookie`, so navigations no longer hit the database. `protectedProcedure` still validates against the database per tRPC call, which is the correct place for it.
+
+
 `middleware.ts:20` calls `auth.api.getSession({ headers })`, which hits Postgres.
 
 Next.js 16's own docs (`node_modules/next/dist/docs/01-app/02-guides/authentication.md:1031`) are explicit:
@@ -343,7 +372,14 @@ if (!sessionCookie) return NextResponse.redirect(new URL("/login", request.url))
 
 **Related:** Next.js 16 renamed Middleware to **Proxy** (`docs/01-app/01-getting-started/16-proxy.md`). `middleware.ts` still works — the build output confirms it, labelling the route `ƒ Proxy (Middleware)` — but the file should be renamed to `proxy.ts` with a `proxy` export. Your own `AGENTS.md` warns about exactly this class of Next 16 drift.
 
-## H6 — No indexes on any `userId` column
+## H6 — No indexes on any `userId` column ✅ FIXED (2026-08-18, migration 0003)
+
+**Resolved.** Seven indexes added, each justified by a query that actually runs: `criteria(user_id, is_active)`, `leads(user_id, status)`, `leads(user_id, next_action_at)`, `leads(job_id)`, `messages(user_id, status)`, `messages(user_id, lead_id)`, `messages(lead_id)`. `jobs` and `scrape_runs` were already covered by the scraper work.
+
+One correction to the original finding: `user_settings.user_id` is `.unique()`, and a unique constraint already creates an index — so it never needed one.
+
+The two `job_id` / `lead_id` indexes aren't for reads. They're the referencing side of the foreign keys added in H7; without them every cascade or SET NULL scans the whole child table.
+
 
 `src/lib/db/schema.ts`
 
@@ -366,7 +402,18 @@ export const criteria = pgTable("criteria", { /* ... */ }, (table) => [
 ]);
 ```
 
-## H7 — No foreign keys on `userId`, so deleting a user orphans everything
+## H7 — No foreign keys on `userId`, so deleting a user orphans everything ✅ FIXED (2026-08-18, migration 0004)
+
+**Resolved.** `criteria`, `jobs`, `leads` and `messages` now reference `user(id)` with `ON DELETE CASCADE`. Deleting a user removes their data in one statement instead of leaving unreachable rows full of scraped personal data — which matters for a GDPR erasure request, not just tidiness.
+
+The child references were set deliberately rather than uniformly:
+
+- `leads.job_id` → **SET NULL**. A hiring manager is still a real contact after the posting they came from is gone.
+- `messages.job_id` → **SET NULL**, same reasoning.
+- `messages.lead_id` → **CASCADE**, because the column is NOT NULL — a message without its lead cannot exist.
+
+**This also fixed a live bug.** `leads.job_id` was `NO ACTION`, so `deleteJobsBySource` threw a foreign key violation whenever a lead pointed at a job being removed — reachable today by turning a source off after running Find Managers. Covered by `src/server/referential-integrity.integration.test.ts`, which asserts enforcement, the SET NULL behaviour, and the cascade.
+
 
 `user_settings.userId` correctly has `.references(() => users.id, { onDelete: "cascade" })`.
 
@@ -403,6 +450,9 @@ Minimum fix: store `file.ufsUrl` and `file.key` on `user_settings`, and delete t
 # 🟡 Medium
 
 ## M1 — `npm run lint` fails with 11 errors
+
+**Partly addressed (2026-08-18):** `cv-parser.ts` is clean now (the `any` is gone). The remaining 11 are all `react/no-unescaped-entities` in components — cosmetic, and untouched.
+
 
 The build passes because Next 16 + Turbopack doesn't run ESLint during `next build`. Run it directly and it fails:
 
@@ -532,7 +582,10 @@ useEffect(() => {
 }, [queryClient, router]);
 ```
 
-## M9 — No migration history
+## M9 — No migration history ✅ FIXED
+
+**Resolved.** `drizzle/` now holds an applied migration chain (0000–0004) with snapshots, replacing `db:push`.
+
 
 `drizzle.config.ts` sets `out: "./drizzle"`, but that directory doesn't exist. The README instructs `npx drizzle-kit push`, which diffs and mutates the live database with no versioned record.
 
@@ -609,9 +662,9 @@ Worth stating plainly, because the list above is long and the work here is bette
 
 **Before this touches a real user:**
 
-1. **C1** — fix the middleware `startsWith("/")` bug (one line)
-2. **C2** — add `userId` to all four unscoped queries; make it a required first arg on every `.db.ts` function
-3. **C3** — pin `cvUrl` to the UploadThing host
+1. ~~**C1** — fix the middleware `startsWith("/")` bug (one line)~~ — done 2026-08-18. Not one line in the end: activating dead code exposed an API-redirect bug and an open redirect.
+2. ~~**C2** — add `userId` to all four unscoped queries; make it a required first arg on every `.db.ts` function~~ — done 2026-08-18, with live cross-tenant tests
+3. ~~**C3** — pin `cvUrl` to the UploadThing host~~ — done 2026-08-18, via a general SSRF guard rather than host pinning
 4. **H3** — relative tRPC URL
 5. **H4** — remove the `env` cast, split server/client
 
