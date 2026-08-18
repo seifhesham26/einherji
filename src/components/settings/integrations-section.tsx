@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, Loader2, Save, Zap } from "lucide-react";
@@ -10,23 +10,23 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGetSettings } from "@/hooks/settings/useGetSettings";
 import { useUpdateIntegrations } from "@/hooks/settings/useUpdateIntegrations";
+import { useDisconnectApify } from "@/hooks/settings/useDisconnectApify";
 import { updateIntegrationsSchema, type UpdateIntegrationsInput } from "@/settings/settings.validators";
 
 export default function IntegrationsSection() {
   const [showToken, setShowToken] = useState(false);
   const { data: settings, isLoading } = useGetSettings();
   const updateIntegrations = useUpdateIntegrations();
+  const disconnectApify = useDisconnectApify();
 
+  // Deliberately never pre-filled: the saved token stays on the server, so all
+  // the client knows is that one exists and how it ends.
   const form = useForm<UpdateIntegrationsInput>({
     resolver: zodResolver(updateIntegrationsSchema),
     defaultValues: { apifyApiToken: "" },
   });
 
-  useEffect(() => {
-    if (settings !== undefined) {
-      form.reset({ apifyApiToken: settings?.apifyApiToken ?? "" });
-    }
-  }, [settings, form]);
+  const hasSavedToken = settings?.hasApifyApiToken ?? false;
 
   return (
     <Card>
@@ -65,13 +65,37 @@ export default function IntegrationsSection() {
                 </div>
               </div>
 
+              {hasSavedToken ? (
+                <div className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Token saved</p>
+                    <p className="font-mono text-sm truncate">{settings?.apifyApiTokenPreview}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={disconnectApify.isPending}
+                    onClick={() => disconnectApify.mutate()}
+                  >
+                    {disconnectApify.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Remove"
+                    )}
+                  </Button>
+                </div>
+              ) : null}
+
               <div className="space-y-1.5">
-                <Label htmlFor="apifyApiToken">API Token</Label>
+                <Label htmlFor="apifyApiToken">
+                  {hasSavedToken ? "Replace API Token" : "API Token"}
+                </Label>
                 <div className="relative">
                   <Input
                     id="apifyApiToken"
                     type={showToken ? "text" : "password"}
-                    placeholder="apify_api_xxxxxxxx…"
+                    placeholder={hasSavedToken ? "Leave blank to keep the saved token" : "apify_api_xxxxxxxx…"}
                     className="pr-10 font-mono text-sm"
                     {...form.register("apifyApiToken")}
                   />

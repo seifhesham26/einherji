@@ -5,6 +5,7 @@ import { getActiveCriteria } from "@/criteria/criteria.db";
 import { getLeadById } from "@/leads/leads.db";
 import { getJobById } from "@/jobs/jobs.db";
 import { setLeadMessageSent } from "@/leads/leads.db";
+import { consumeQuota } from "@/usage/usage.service";
 import { getMessages, upsertDraftMessage, approveMessage } from "./messages.db";
 import type { GetMessagesInput, GenerateMessageInput, ApproveMessageInput, MessageTemplate } from "./messages.validators";
 import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
@@ -14,6 +15,10 @@ export async function fetchMessages(db: Database, userId: string, input: GetMess
 }
 
 export async function generateAndSaveMessage(db: Database, userId: string, input: GenerateMessageInput) {
+  // Charged before the model call, not after — a completion that errors partway
+  // can still have been billed.
+  await consumeQuota(db, userId, "generate_message");
+
   // Both scoped to userId. The lead lookup wasn't, which meant supplying someone
   // else's leadId fed their hiring manager's name, headline, about text and
   // recent posts into an LLM prompt and saved the result to your account.

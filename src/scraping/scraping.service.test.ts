@@ -28,6 +28,7 @@ const mocks = {
   failStaleRun: vi.fn(),
   fetchAggregatorJobs: vi.fn(),
   insertJobs: vi.fn(),
+  consumeQuota: vi.fn(),
 };
 
 vi.mock("./scraping.db", async (importOriginal) => ({
@@ -42,6 +43,12 @@ vi.mock("./scraping.db", async (importOriginal) => ({
   recordTaskProgress: (...args: unknown[]) => mocks.recordTaskProgress(...args),
   failStaleRun: (...args: unknown[]) => mocks.failStaleRun(...args),
   cancelScrapeRun: vi.fn(),
+}));
+
+// Quota enforcement has its own live test (src/usage/usage.integration.test.ts);
+// here it just needs to not reach for a database.
+vi.mock("@/usage/usage.service", () => ({
+  consumeQuota: (...args: unknown[]) => mocks.consumeQuota(...args),
 }));
 
 vi.mock("@/criteria/criteria.db", () => ({
@@ -82,6 +89,27 @@ describe("startScrape", () => {
     }));
     mocks.fetchAggregatorJobs.mockResolvedValue([]);
     mocks.insertJobs.mockResolvedValue([]);
+    mocks.consumeQuota.mockResolvedValue(undefined);
+  });
+
+  it("charges the scrape quota before doing any work", async () => {
+    const { startScrape } = await import("./scraping.service");
+
+    await startScrape(db, "user_1", { sources: ["remoteok"] });
+
+    expect(mocks.consumeQuota).toHaveBeenCalledWith(db, "user_1", "scrape");
+  });
+
+  it("does not start a run when the quota is exhausted", async () => {
+    const { startScrape } = await import("./scraping.service");
+    mocks.consumeQuota.mockRejectedValue(
+      new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Daily limit reached" }),
+    );
+
+    await expect(startScrape(db, "user_1", { sources: ["remoteok"] })).rejects.toMatchObject({
+      code: "TOO_MANY_REQUESTS",
+    });
+    expect(mocks.insertScrapeRun).not.toHaveBeenCalled();
   });
 
   it("refuses to start while another run is in flight", async () => {

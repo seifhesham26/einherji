@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
 import { getSourceDefinition } from "@/lib/scrapers/source-registry";
+import { maskSecret } from "@/utils/mask-secret";
 import type { JobSourceName } from "@/lib/scrapers/job-source.types";
 import {
   deleteCredentials,
@@ -17,9 +18,7 @@ import type {
 /**
  * Returns which sources are configured, with masked previews.
  *
- * Deliberately never returns the raw secret: settings.get already leaks the Apify
- * token into the browser's query cache (AUDIT.md M10) and there's no reason to
- * repeat that here.
+ * Deliberately never returns the raw secret — only a masked preview.
  */
 export async function fetchCredentialStatuses(
   db: Database,
@@ -29,7 +28,7 @@ export async function fetchCredentialStatuses(
 
   return rows.map((row) => ({
     source: row.source,
-    isConfigured: Object.keys(row.credentials ?? {}).length > 0,
+    isConfigured: isComplete(row.source as JobSourceName, row.credentials ?? {}),
     maskedValues: maskCredentials(row.source, row.credentials ?? {}),
     updatedAt: row.updatedAt,
   }));
@@ -92,6 +91,18 @@ export async function removeSourceCredentials(
   return { source: deleted.source };
 }
 
+/**
+ * True when every field the source declares is present.
+ *
+ * A half-filled set is treated as not configured rather than sent upstream —
+ * an Adzuna call with an appId and no apiKey fails looking like a bad key.
+ */
+function isComplete(source: JobSourceName, values: Record<string, string | undefined>): boolean {
+  const definition = getSourceDefinition(source);
+  if (!definition || definition.credentialFields.length === 0) return false;
+  return definition.credentialFields.every((field) => Boolean(values[field.key]?.trim()));
+}
+
 // Used by the scrape orchestrator, which does need the real values.
 export async function resolveCredentials(
   db: Database,
@@ -99,10 +110,9 @@ export async function resolveCredentials(
   source: JobSourceName,
 ): Promise<Record<string, string> | null> {
   const row = await getCredentialsForSource(db, userId, source);
-  return row?.credentials ?? null;
+  if (!row || !isComplete(source, row.credentials)) return null;
+  return row.credentials;
 }
-
-const VISIBLE_SUFFIX_LENGTH = 4;
 
 function maskCredentials(
   source: string,
@@ -116,12 +126,7 @@ function maskCredentials(
       // Non-secret fields (an app id) are safe to show in full and are useful for
       // confirming the right account is connected.
       if (field && !field.isSecret) return [key, value];
-      return [key, maskValue(value)];
+      return [key, maskSecret(value)];
     }),
   );
-}
-
-function maskValue(value: string): string {
-  if (value.length <= VISIBLE_SUFFIX_LENGTH) return "••••";
-  return `••••${value.slice(-VISIBLE_SUFFIX_LENGTH)}`;
 }

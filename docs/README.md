@@ -5,8 +5,10 @@
 > Claude API direct → actually OpenRouter. The `docs/docs/*` files have the same drift.
 >
 > **Current docs:**
+> - **[NEXT-STEPS.md](./NEXT-STEPS.md)** — start here: what to do next, in order, free things first
 > - **[AUDIT.md](./AUDIT.md)** — accurate review of what actually exists, what's broken, and what to fix first
 > - **[SCRAPER-PLAN.md](./SCRAPER-PLAN.md)** — plan for replacing Apify with a self-hosted scraper
+> - **[paid-services/](./paid-services/)** — what costs money, what's free, and what's deferred until there's budget
 
 ## Overview
 An automated job hunting system that scrapes LinkedIn jobs via Apify, finds hiring managers, generates personalized outreach messages using Claude AI, lets you approve them, then tracks everything in a CRM.

@@ -13,6 +13,7 @@ import {
 } from "@/lib/scrapers/aggregators/fetch-aggregator-jobs";
 import { linkedInJobSource } from "@/lib/scrapers/linkedin/search-jobs";
 import { getSourceDefinition } from "@/lib/scrapers/source-registry";
+import { consumeQuota } from "@/usage/usage.service";
 import type {
   JobSearchQuery,
   JobSourceName,
@@ -80,6 +81,10 @@ export async function cancelRun(db: Database, userId: string, runId: string) {
  */
 export async function startScrape(db: Database, userId: string, input: StartScrapeInput) {
   await assertNoRunInFlight(db, userId);
+  // Cheap in money, but the cost that matters is our IP being blocked by the
+  // boards. The one-run-at-a-time guard above stops parallel runs; this stops a
+  // sequential loop.
+  await consumeQuota(db, userId, "scrape");
 
   const [activeCriteria, settings, companies] = await Promise.all([
     getActiveCriteria(db, userId),

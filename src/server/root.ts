@@ -7,6 +7,7 @@ import { leadsRouter } from "@/leads/leads.router";
 import { messagesRouter } from "@/messages/messages.router";
 import { scrapingRouter } from "@/scraping/scraping.router";
 import { settingsRouter } from "@/settings/settings.router";
+import { usageRouter } from "@/usage/usage.router";
 
 export const appRouter = createTRPCRouter({
   companies: companiesRouter,
@@ -17,6 +18,7 @@ export const appRouter = createTRPCRouter({
   messages: messagesRouter,
   scraping: scrapingRouter,
   settings: settingsRouter,
+  usage: usageRouter,
 });
 
 export type AppRouter = typeof appRouter;

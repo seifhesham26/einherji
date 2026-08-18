@@ -6,6 +6,7 @@ import {
   updateJobSourcesSchema,
 } from "./settings.validators";
 import {
+  disconnectApify,
   getUserSettings,
   updateProfile,
   updateIntegrations,
@@ -28,6 +29,10 @@ export const settingsRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       return updateIntegrations(db, ctx.session.user.id, input);
     }),
+
+  disconnectApify: protectedProcedure.mutation(async ({ ctx }) => {
+    return disconnectApify(db, ctx.session.user.id);
+  }),
 
   updateJobSources: protectedProcedure
     .input(updateJobSourcesSchema)

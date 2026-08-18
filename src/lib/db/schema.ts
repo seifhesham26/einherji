@@ -238,7 +238,7 @@ export const userSettings = pgTable("user_settings", {
   jobTitle: text("job_title"),
   linkedinUrl: text("linkedin_url"),
 
-  // Personal Apify API token — overrides the server-wide APIFY_API_TOKEN env var
+  // Personal Apify API token. Per-account by design — Apify bills per run.
   apifyApiToken: text("apify_api_token"),
 
   // Which scrapers to run. Defaults to apify so existing users are unaffected
@@ -325,6 +325,28 @@ export const scrapeRuns = pgTable("scrape_runs", {
   uniqueIndex("scrape_runs_one_active_per_user_idx")
     .on(table.userId)
     .where(sql`${table.status} = 'running'`),
+]);
+
+// ─── Usage events ─────────────────────────────────────────────────────────────
+// One row per billable action, so quotas survive a serverless cold start. An
+// in-memory counter would reset on every new lambda and cap nothing.
+
+export const usageActionEnum = pgEnum("usage_action", [
+  "generate_message",
+  "parse_cv",
+  "find_managers",
+  "scrape",
+]);
+
+export const usageEvents = pgTable("usage_events", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  action: usageActionEnum("action").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // Every read is "this user, this action, since this time" — the whole query
+  // is answered from the index.
+  index("usage_events_user_action_time_idx").on(table.userId, table.action, table.createdAt),
 ]);
 
 // ─── Messages ─────────────────────────────────────────────────────────────────

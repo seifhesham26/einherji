@@ -41,3 +41,4 @@ export const saveCriteriaSchema = z.object({
 });
 
 export type SaveCriteriaInput = z.infer<typeof saveCriteriaSchema>;
+export type ExtractFromCvInput = z.infer<typeof extractFromCvSchema>;

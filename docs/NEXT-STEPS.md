@@ -1,0 +1,248 @@
+# Setup & next steps
+
+**Updated:** 2026-08-18
+
+Sections 1–6 get the app running and deployed. Everything after that is what to
+build next — all of it free.
+
+---
+
+# Part 1 — Setup
+
+## 1. Prerequisites
+
+| Thing | Notes |
+|---|---|
+| **Node 20+** | Developed on 22. Check with `node -v`. |
+| **npm** | The repo uses `package-lock.json` — don't switch to pnpm/yarn without regenerating it. |
+| **A Postgres database** | Neon's free tier is what this is built against: https://console.neon.tech |
+| **An OpenRouter account** | https://openrouter.ai → Keys. The default model is a free one, so this costs nothing. |
+
+Nothing else is needed to start. No Apify account and no paid API keys — those are
+per-account and added later from inside the app.
+
+## 2. Install
+
+```bash
+git clone <your-repo-url>
+cd einherji
+npm install
+```
+
+## 3. Environment variables
+
+```bash
+cp .env.local.example .env.local
+```
+
+**Five variables are required.** The app refuses to boot without them by design —
+`src/lib/env.ts` validates on import, so a missing one fails immediately and names
+the field rather than surfacing as a confusing runtime error later.
+
+| Variable | Where it comes from |
+|---|---|
+| `DATABASE_URL` | Neon → your project → Connection string |
+| `OPENROUTER_API_KEY` | https://openrouter.ai → your avatar → Keys |
+| `BETTER_AUTH_SECRET` | Generate it — see below |
+| `BETTER_AUTH_URL` | `http://localhost:3000` locally |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` locally |
+
+**One more you should set.** Without it, saving any API key in the app throws:
+
+| Variable | Purpose |
+|---|---|
+| `CREDENTIALS_ENCRYPTION_KEY` | Encrypts stored API keys at rest (AES-256-GCM) |
+
+Generate both secrets:
+
+```bash
+node -e "console.log('BETTER_AUTH_SECRET=' + require('crypto').randomBytes(32).toString('base64'))"
+node -e "console.log('CREDENTIALS_ENCRYPTION_KEY=' + require('crypto').randomBytes(32).toString('base64'))"
+```
+
+> ⚠️ **`CREDENTIALS_ENCRYPTION_KEY` must decode to exactly 32 bytes**, and must be
+> the *same value* everywhere the app runs. Changing it makes every already-saved
+> API key permanently unreadable — there is no re-encryption path.
+
+Genuinely optional: `RESEND_API_KEY` + `RESEND_FROM_EMAIL` (verification emails —
+without them the link is printed to the server console, which is fine for
+development), `UPLOADTHING_TOKEN` (CV upload), `OPENAI_API_KEY`.
+
+**Job source keys are not environment variables.** Adzuna, Reddit, X, SerpAPI and
+Apify are all per-account, entered in the app and encrypted at rest. See section 7.
+
+## 4. Create the database schema
+
+```bash
+npm run db:migrate
+```
+
+That applies all six migrations. Re-run it whenever you pull changes touching
+`src/lib/db/schema.ts`.
+
+> Use `npm run db:migrate`, **not** `db:push`. The migration history is the record
+> of what production has had applied to it.
+
+## 5. Run it, and set up your account
+
+```bash
+npm run dev          # http://localhost:3000
+```
+
+Then in the browser:
+
+1. **Register** at `/register`. Email verification is *not* required to sign in —
+   you get a prompt banner instead, so a missing Resend key won't block you.
+2. **Set your criteria** at `/criteria` — job titles and locations at minimum.
+   Aggregators are keyword-driven, so **a scrape refuses to run without active
+   criteria.** You can upload a CV here and have them filled in for you.
+3. **Add target companies** at `/companies` if you want the ATS boards. Type a
+   company name and it tries to resolve their board automatically. These sources
+   need a company — they can't be searched blind.
+4. **Pick your sources** in Settings. Sixteen work with no key at all:
+
+   | Tier | Sources |
+   |---|---|
+   | Company boards (6) | Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Rippling |
+   | Aggregators (7) | RemoteOK, Arbeitnow, Jobicy, The Muse, Himalayas, We Work Remotely, HN "Who is Hiring" |
+   | Freelance (2) | Freelancer.com, HN "Seeking Freelancer" |
+   | Scraped (1) | LinkedIn (logged-out endpoints) |
+
+   LinkedIn needs no key either, but it's the slowest by a wide margin — it's
+   rate-limited deliberately and does a second request per job for the
+   description. It will eat most of the 60-second budget on its own, so enable it
+   on a run of its own rather than alongside fifteen others.
+
+5. **Run a scrape** from the dashboard. Start with three or four sources — see the
+   60-second cap under Known gaps.
+
+That's a working install. Everything below is optional.
+
+## 6. Deploying to Vercel
+
+1. Add all six variables from section 3 under
+   **Vercel → Project → Settings → Environment Variables**.
+2. Use the **same** `CREDENTIALS_ENCRYPTION_KEY` as local, or keys already saved
+   through your local install won't decrypt in production.
+3. Point `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` at the deployed URL, not localhost.
+4. Run the migrations against production:
+
+   ```bash
+   DATABASE_URL="<your production connection string>" npm run db:migrate
+   ```
+
+5. Deploy.
+
+---
+
+# Part 2 — What to do next
+
+## 7. Free signups — two more job sources, about 10 minutes
+
+Both are free. The code is written; only the key is missing.
+
+**Keys are per-account**, entered under Settings → Source credentials. They're
+encrypted at rest and never sent back to the browser.
+
+> **Why not environment variables?** Rate limits and billing attach to the *key*,
+> not the user. A shared key means every account draws down one quota, and an
+> account that never adds its own would silently spend yours.
+
+### Adzuna
+1. Sign up at https://developer.adzuna.com/signup
+2. Copy your **App ID** and **App Key**
+3. Settings → Source credentials → Adzuna → **Add key** → paste both → Save
+4. Enable `adzuna` in your job sources
+
+### Reddit
+1. https://www.reddit.com/prefs/apps → **create another app…**
+2. Choose type **script**. Redirect URI can be `http://localhost:3000`.
+3. Copy the **client id** (the string under the app name) and the **secret**
+4. Settings → Source credentials → Reddit → **Add key** → paste both → Save
+5. Enable `reddit` — this pulls freelance gigs from r/forhire, r/jobbit,
+   r/remotejs and r/hiring
+
+> Unauthenticated Reddit JSON returns 403, which is the only reason an app is needed.
+
+**Both halves of a pair must be filled in.** A source with half a key counts as not
+configured rather than sending a broken request — otherwise the failure looks like
+a rejected key, which is a confusing thing to debug.
+
+Same route for the paid ones later: X and SerpAPI, and Apify under
+Settings → Integrations.
+
+## 8. The next thing worth building — assisted sending (free)
+
+This closes the last product gap. The app generates and approves messages, then
+stops: `sentAt` is never written and `sent` is a status nothing sets.
+
+**Why not automated sending:** `leads.email` is never populated — the profile
+scraper returns no email addresses. Automating it needs a paid email-finding
+service *and* a warmed sending domain *and* a GDPR lawful basis. See
+[`paid-services/email-finding.md`](./paid-services/email-finding.md).
+
+**The free version, roughly:**
+1. A copy-to-clipboard button on each approved message
+2. A "Mark as sent" action → sets `status = 'sent'` and `sentAt = now()`
+3. Scope both to `userId` in the `WHERE` clause, like every other write
+4. Show sent messages in the tracker
+
+At around ten messages a week, hand-sending isn't the bottleneck — and you'd want
+to read a cold outreach message before it goes anyway. Build this, use it for a few
+weeks, and you'll know whether automation is worth paying for instead of guessing.
+
+## 9. When you have budget
+
+Full ledger: [`paid-services/README.md`](./paid-services/README.md). Best value first:
+
+1. **Upstash QStash** — free tier may well be enough. Removes the 60-second scrape cap.
+2. **Apify credits** — makes "Find Managers" work.
+3. The rest is optional, and I'd argue against X (~$100/mo) and proxy providers.
+
+---
+
+# Reference
+
+## Commands
+
+```bash
+npm run dev                 # local dev server
+npm test                    # unit tests — fast, no network, no database
+npm run test:canary         # hits all 21 real job sources; confirms none have broken
+npm run test:integration    # writes to the real database; needs SCRAPER_TEST_USER_ID
+npm run build               # production build
+npm run lint
+npm run db:generate         # after changing src/lib/db/schema.ts
+npm run db:migrate          # apply pending migrations
+```
+
+**Run `npm run test:canary` if scraping suddenly returns nothing.** Job boards
+change their markup without warning, and that suite tells you *which* one broke
+rather than leaving you guessing.
+
+## Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| Won't start, "Invalid environment variables" | One of the five required vars is missing or malformed. The error names the field. |
+| "No active criteria found" when scraping | Set titles and locations at `/criteria` first. |
+| "Nothing to scrape" | No tracked companies *and* no aggregator sources enabled. |
+| Saving an API key throws | `CREDENTIALS_ENCRYPTION_KEY` is missing, or doesn't decode to 32 bytes. |
+| Saved keys stopped working after a deploy | `CREDENTIALS_ENCRYPTION_KEY` differs between environments. |
+| "A scrape is already running" | One run at a time, per account. Cancel it, or wait — a dead run is retired after 5 minutes. |
+| "Daily limit reached" | A usage quota. Limits are in `src/usage/usage.validators.ts`. |
+| A source returns nothing, with no error | Run `npm run test:canary`. |
+
+## Known gaps
+
+- **Scrapes are capped at 60 seconds.** Selecting all 21 sources means the run
+  stops partway and says so. Fewer sources per run works fine. QStash is the fix.
+- **Quotas are live**, per rolling 24 hours: 50 message generations, 20 CV parses,
+  25 manager searches, 50 scrapes. Adjust in `src/usage/usage.validators.ts`.
+- **CVs sit on public UploadThing URLs** (AUDIT H8) — anyone with the link can read
+  yours. Not yet fixed.
+- **The `apify` job source is legacy and does nothing.** It's kept in the enum so
+  historical rows stay readable, but its job fetcher was deleted when the
+  self-hosted scraper replaced it. Selecting it produces no tasks. Apify is still
+  used for "Find Managers", which is a separate path.
+- **11 lint errors remain**, all cosmetic `react/no-unescaped-entities` in components.

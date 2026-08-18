@@ -1,15 +1,12 @@
 import { ApifyClient } from "apify-client";
-import { env } from "@/lib/env";
+import { z } from "zod";
+import { parseArrayLeniently } from "@/lib/scrapers/job-source.types";
 
-export const MAX_JOBS_PER_SCRAPE = 100;
+// LinkedIn *profiles* are auth-walled with no logged-out equivalent, so this one
+// path still runs on Apify. Job scraping moved to the self-hosted scraper — see
+// docs/SCRAPER-PLAN.md.
+
 export const MAX_MANAGERS_PER_JOB = 5;
-
-const COMPANY_SIZE_FILTERS: Record<string, string> = {
-  "50-200": "B",
-  "201-500": "C",
-  "501-1000": "D",
-  "1001+": "E,F",
-};
 
 const MANAGER_TITLE_MAP: Record<string, string[]> = {
   engineer: ["Engineering Manager", "VP Engineering", "CTO", "Head of Engineering", "Director of Engineering"],
@@ -22,70 +19,92 @@ const MANAGER_TITLE_MAP: Record<string, string[]> = {
 
 const GENERIC_MANAGER_TITLES = ["VP", "Director", "Head of", "Manager"];
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface ScrapeJobsInput {
-  titles: string[];
-  locations: string[];
-  companySizeMin?: number;
-  companySizeMax?: number;
-  salaryMin?: number;
-  industries?: string[];
-  daysPosted?: number;
-}
-
-export interface ScrapedJob {
-  id: string;
-  title: string;
-  company: string;
-  companySize: string;
-  location: string;
-  salary: string;
-  description: string;
-  jobUrl: string;
-  postedAt: string;
-}
-
 export interface ScrapedProfile {
   firstName: string;
-  lastName: string;
-  title: string;
+  lastName: string | null;
+  title: string | null;
   company: string;
-  linkedinUrl: string;
-  headline: string;
-  about: string;
+  linkedinUrl: string | null;
+  headline: string | null;
+  about: string | null;
 }
 
-// ─── Factory ──────────────────────────────────────────────────────────────────
+// ─── Response validation ──────────────────────────────────────────────────────
+//
+// The actor's output schema has never been verified against a real run, and it
+// belongs to a third party who can change it without telling us (AUDIT C4). The
+// old code cast the response with `as unknown as`, so a renamed field became
+// `undefined`, then a NOT NULL violation deep inside insertLeads — a 500 with a
+// Postgres error, from a scraper change nobody here made.
+//
+// Parsing instead means a shape we don't recognise produces "no managers found"
+// and a clear message, which is a true statement either way.
 
-// Creates a client with the user's personal token first, falling back to the env token.
-// Throws a user-facing error if neither is configured.
-function createApifyClient(userToken?: string | null): ApifyClient {
-  const token = userToken ?? env.APIFY_API_TOKEN;
-  if (!token) {
-    throw new Error(
-      "No Apify API token found. Add your key in Settings → Integrations to enable job scraping."
-    );
-  }
-  return new ApifyClient({ token });
-}
-
-// ─── Functions ────────────────────────────────────────────────────────────────
-
-export async function scrapeLinkedInJobs(input: ScrapeJobsInput, apifyToken?: string | null): Promise<ScrapedJob[]> {
-  const apify = createApifyClient(apifyToken);
-  const run = await apify.actor("curious_coder/linkedin-jobs-scraper").call({
-    searchTerms: input.titles,
-    location: input.locations.join(", "),
-    dateSincePosted: `past ${input.daysPosted ?? 7} days`,
-    companySize: buildCompanySizeFilter(input.companySizeMin, input.companySizeMax),
-    salary: input.salaryMin ? `${input.salaryMin}+` : undefined,
-    industry: input.industries?.join(","),
-    maxResults: MAX_JOBS_PER_SCRAPE,
+const optionalText = z
+  .union([z.string(), z.number()])
+  .nullish()
+  .transform((value) => {
+    const trimmed = value === null || value === undefined ? "" : String(value).trim();
+    return trimmed.length > 0 ? trimmed : null;
   });
 
-  const { items } = await apify.dataset(run.defaultDatasetId).listItems();
-  return items as unknown as ScrapedJob[];
+const apifyProfileSchema = z
+  .object({
+    firstName: optionalText,
+    lastName: optionalText,
+    // Some profile actors return only a combined name.
+    fullName: optionalText,
+    name: optionalText,
+    title: optionalText,
+    jobTitle: optionalText,
+    company: optionalText,
+    companyName: optionalText,
+    linkedinUrl: optionalText,
+    profileUrl: optionalText,
+    url: optionalText,
+    headline: optionalText,
+    about: optionalText,
+    summary: optionalText,
+  })
+  .partial()
+  .transform((raw) => {
+    const [derivedFirst, ...derivedRest] = (raw.fullName ?? raw.name ?? "").split(/\s+/);
+
+    return {
+      firstName: raw.firstName ?? derivedFirst ?? null,
+      lastName: raw.lastName ?? (derivedRest.length > 0 ? derivedRest.join(" ") : null),
+      title: raw.title ?? raw.jobTitle ?? null,
+      company: raw.company ?? raw.companyName ?? null,
+      linkedinUrl: raw.linkedinUrl ?? raw.profileUrl ?? raw.url ?? null,
+      headline: raw.headline ?? null,
+      about: raw.about ?? raw.summary ?? null,
+    };
+  })
+  // firstName and company are both NOT NULL on the leads table, but only the
+  // name has to come from the actor — the company is the one we searched for, so
+  // it's always available as a fallback below. A record with no usable name
+  // can't be stored at all, so it's dropped here rather than failing the insert.
+  .refine((profile): profile is typeof profile & { firstName: string } =>
+    Boolean(profile.firstName),
+  );
+
+export class ApifyResponseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApifyResponseError";
+  }
+}
+
+// Per-account only. There is deliberately no server-wide fallback: Apify bills
+// per run, so a shared token means one account's searches spend another's
+// credits — silently, because it would look like it was working.
+function createApifyClient(userToken?: string | null): ApifyClient {
+  if (!userToken) {
+    throw new Error(
+      "No Apify API token found. Add your key in Settings → Integrations to enable hiring-manager search."
+    );
+  }
+  return new ApifyClient({ token: userToken });
 }
 
 export async function findHiringManagers(
@@ -106,10 +125,24 @@ export async function findHiringManagers(
   });
 
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
-  return items as unknown as ScrapedProfile[];
-}
+  const profiles = parseArrayLeniently(items, apifyProfileSchema);
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+  // Every record failing while the actor returned data means its output shape
+  // changed. Say that plainly — the alternative is a silent zero that looks
+  // identical to "this company has no hiring managers on LinkedIn".
+  if (profiles.length === 0 && items.length > 0) {
+    throw new ApifyResponseError(
+      `The LinkedIn profile scraper returned ${items.length} result(s) in a format this app doesn't recognise. The actor's output schema has probably changed.`,
+    );
+  }
+
+  return profiles.map((profile) => ({
+    ...profile,
+    // The company we searched for is more reliable than whatever the profile
+    // lists, which is often a former employer.
+    company: profile.company || company,
+  }));
+}
 
 export function getManagerTitles(jobTitle: string): string[] {
   const lower = jobTitle.toLowerCase();
@@ -117,13 +150,4 @@ export function getManagerTitles(jobTitle: string): string[] {
     if (lower.includes(keyword)) return titles;
   }
   return GENERIC_MANAGER_TITLES;
-}
-
-function buildCompanySizeFilter(min?: number, max?: number): string {
-  if (!min && !max) return "";
-  if (min === 50 && max === 200) return COMPANY_SIZE_FILTERS["50-200"];
-  if (min === 201 && max === 500) return COMPANY_SIZE_FILTERS["201-500"];
-  if (min === 501 && max === 1000) return COMPANY_SIZE_FILTERS["501-1000"];
-  if (min && min > 1000) return COMPANY_SIZE_FILTERS["1001+"];
-  return "";
 }

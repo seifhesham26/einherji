@@ -5,8 +5,6 @@ import { z } from "zod";
 
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  // Optional server-wide fallback — users can supply their own key in Settings
-  APIFY_API_TOKEN: z.string().optional(),
   OPENROUTER_API_KEY: z.string().min(1),
   OPENAI_API_KEY: z.string().optional(),
   BETTER_AUTH_SECRET: z.string().min(1),
@@ -17,6 +15,11 @@ const serverEnvSchema = z.object({
   RESEND_FROM_EMAIL: z.string().optional(),
   // Required for CV upload — add to Vercel before deploying the CV upload feature
   UPLOADTHING_TOKEN: z.string().optional(),
+  // Encrypts third-party API keys at rest. Optional here so the app still boots
+  // without it — the failure is raised when a secret is actually read or written,
+  // which fails closed at the point that matters instead of taking down the app.
+  CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),
+
 });
 
 // ─── Client-safe env vars ─────────────────────────────────────────────────────

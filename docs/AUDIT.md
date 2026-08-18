@@ -4,7 +4,9 @@
 **Reviewed at commit:** `5d16c4d`
 **Reviewer:** Claude (Opus 5)
 
-> **Status update (2026-08-18): C1, C2 and C3 are closed. C4 is half closed.** The Apify *job* path it describes was replaced by the self-hosted scraper (`docs/SCRAPER-PLAN.md`), which validates every source with Zod at the boundary — but `findHiringManagers` still runs on Apify and still ends in `items as unknown as ScrapedProfile[]`, so the C4 risk is live for the Find Managers flow. The verdict below is preserved as written on 2026-08-17: it describes commit `5d16c4d`, not today's code. Each section carries its own status line.
+> **Status update (2026-08-18): all four Criticals are closed, as are H2, H5, H6, H7, M1 (partly), M3 and M9.** The verdict below is preserved as written on 2026-08-17: it describes commit `5d16c4d`, not today's code. Each section carries its own status line.
+>
+> Still open and worth knowing about: **H1** (nothing is ever sent — and it is blocked, see below), **H3/H4** (env and tRPC URL handling), **H8** (uploaded CVs sit on public URLs), and the scraper's 60-second run budget (`docs/SCRAPER-PLAN.md` Phase 3.5).
 
 This is an honest, unvarnished review of the project as it stands. Every finding below was verified against the actual code — not guessed. Where I could prove something with a build, a lint run, or the bundled Next.js docs, I did, and I say so.
 
@@ -211,9 +213,15 @@ The stronger version: don't accept a URL from the client at all. Store the uploa
 
 ---
 
-## C4 — The Apify integration is unverified and will crash on bad field names ⚠️ HALF OPEN (2026-08-18)
+## C4 — The Apify integration is unverified and will crash on bad field names ✅ FIXED (2026-08-18)
 
-**`scrapeLinkedInJobs` is retired** — the self-hosted scraper replaced it and validates every record with Zod (`scrapedJobSchema`). **`findHiringManagers` is unchanged** and still does `items as unknown as ScrapedProfile[]`, so everything below still applies to the Find Managers flow. That's Phase 4 work.
+**Resolved, both halves.** `scrapeLinkedInJobs` was dead code once the self-hosted scraper landed — nothing imported it — so it was deleted outright along with the company-size filter helpers only it used. That removes half the risk surface rather than guarding it.
+
+`findHiringManagers` now parses its response instead of casting it. Every record goes through a Zod schema via `parseArrayLeniently`, so one malformed profile can't discard the batch. Records with no usable name are dropped before the insert, which is exactly the crash described below: `firstName` and `company` are NOT NULL on `leads`, so a renamed field became `undefined` and then a Postgres violation three layers down.
+
+I still cannot verify the actor's *input* schema without a paid run, so the fix is defensive rather than confirmatory — but the failure mode is now a clear message instead of a 500. If every record fails while the actor did return data, it raises `ApifyResponseError` saying the output shape has changed, rather than reporting zero managers found — which would be indistinguishable from a company genuinely having none.
+
+The schema also accepts common field-name variants (`fullName`/`name` split into first and last, `profileUrl`/`url`, `summary`), since profile scrapers differ on these. Covered by `src/lib/apify/parse-profiles.test.ts`, which stubs the SDK and costs nothing to run.
 
 
 `src/lib/apify/client.ts:88-100`
@@ -280,7 +288,20 @@ return parsed.filter((result) => result.success).map((result) => result.data);
 
 # 🟠 High
 
-## H1 — Nothing is ever sent. The product stops at "approve."
+## H1 — Nothing is ever sent. The product stops at "approve." ⛔ BLOCKED (verified 2026-08-18)
+
+**This cannot be built as things stand.** `leads.email` exists on the table and **nothing ever writes to it** — `findHiringManagers` returns names, titles, headlines and profile URLs, but no email address. So there is no address to send to.
+
+Finishing this needs a decision first, not code:
+
+1. **Add an email-finding step** (Hunter.io, Apollo, Clearbit) — a paid dependency, and it changes what the app is doing with personal data.
+2. **Send on LinkedIn instead** — not possible without automating a logged-in session, which is against their terms and is exactly the line the scraper work deliberately stayed behind.
+3. **Change the flow to assisted rather than automated** — generate the message, then hand it to the user to send themselves. No new dependency, and it keeps the compliance surface where it is now.
+
+Option 3 is the smallest honest version and would make the product complete end to end.
+
+These three options are written up properly, with the compliance and deliverability trade-offs, in [`docs/paid-services/email-finding.md`](./paid-services/email-finding.md).
+
 
 Verified by grep: **nothing in `src/` ever writes `sentAt` or sets status to `"sent"`.** The column and the enum value exist; no code path reaches them.
 
@@ -292,7 +313,19 @@ So the lead is marked "Message Sent" when no message was sent. The user still ha
 
 This is a legitimate product decision (LinkedIn automation is a ToS minefield, and I'd push back hard on automating it). But then the UI should say so. Rename the status to `ready_to_send`, add an explicit "Mark as sent" action that stamps `sentAt`, and let the user confirm the thing they actually did.
 
-## H2 — No ownership means no rate limit means no cost ceiling
+## H2 — No ownership means no rate limit means no cost ceiling ✅ FIXED (2026-08-18, migration 0005)
+
+**Resolved.** A `usage_events` table records one row per billable action, and `consumeQuota` enforces a rolling 24-hour cap per user per action: 50 message generations, 20 CV parses, 25 hiring-manager searches, 50 scrapes.
+
+Backed by Postgres rather than an in-memory counter **because this runs on Vercel** — a process-local limiter resets on every cold start and caps nothing at all.
+
+Two deliberate choices:
+
+- **The quota is charged before the work, not after.** A completion that fails partway can still have been billed by the provider, so counting only successes would leave a retry loop free to spend without limit.
+- **The check and the insert are not atomic.** Two simultaneous requests can both pass on the last unit. That bounds the overshoot to the number of concurrent requests instead of leaving the ceiling unbounded, which is all this needs to do — a lock per call would cost more than the unit it protects.
+
+`usage.getQuotas` exposes the remaining allowance so the UI can warn before a user hits a wall mid-task. Covered by `src/usage/usage.integration.test.ts`, including per-user and per-action separation and that a failed attempt still counts.
+
 
 `jobs.scrape`, `jobs.findManagers`, `messages.generate`, and `criteria.extractFromCv` all call paid third-party APIs. There is no rate limiting, no debounce, no per-user quota, no daily cap.
 
@@ -496,7 +529,10 @@ import { APIError } from "openai";
 
 Also: this logic belongs in one shared place. `generateOutreachMessage` in `ai/client.ts` has **no** error handling at all — the same rate limit that produces a friendly message during CV parsing produces a raw 500 during message generation.
 
-## M3 — `criteria.extractFromCv` skips the service layer
+## M3 — `criteria.extractFromCv` skips the service layer ✅ FIXED (2026-08-18)
+
+**Resolved.** The router now calls `extractCv` in `criteria.service.ts` rather than reaching into `lib/cv-parser` directly. That's also what gave the CV-parse quota somewhere to live — the procedure had dropped `ctx` entirely, so it had no user id to charge.
+
 
 `src/criteria/criteria.router.ts:16-20` calls `extractCvFromUrl` from `@/lib/cv-parser` directly. Every other procedure in the codebase goes router → service → db. This one goes router → lib.
 
@@ -593,7 +629,23 @@ That's fine for solo development. It is genuinely dangerous the first time you h
 
 Switch to `drizzle-kit generate` + `migrate` and commit the `drizzle/` folder before you have data you care about. This is also a prerequisite for the index and foreign-key changes in H6/H7 — you want those reviewable.
 
-## M10 — Apify tokens are stored in plaintext
+## M10 — Apify tokens are stored in plaintext ✅ FIXED (2026-08-18)
+
+**Resolved, and it was two problems rather than one.**
+
+*At rest:* `src/lib/crypto/secret-box.ts` encrypts with AES-256-GCM, keyed from `CREDENTIALS_ENCRYPTION_KEY` (32 random bytes, base64) held outside the database. It covers `user_settings.apify_api_token`, `user_settings.scraping_proxy_api_key`, and every value in `source_credentials.credentials`. Encryption is applied in the `.db.ts` layer, so nothing above it has to remember and nothing below it holds a readable key. GCM rather than CBC because it authenticates: a tampered ciphertext fails loudly instead of decrypting to garbage that then gets sent to a third-party API. Hashing isn't an option — the scraper has to send the real value upstream.
+
+*In transit to the client:* `settings.get` returned the whole row, putting the raw token in TanStack Query's cache and the React tree. The service now strips it and returns `hasApifyApiToken` plus a `••••` preview. TypeScript caught the one component that depended on the old shape, which is the point of stripping it at the type level rather than at runtime.
+
+Two consequences worth knowing:
+
+- **Rows written before this are plaintext and are passed through unchanged**, not rejected — failing on them would lock users out of keys they already saved. Re-saving upgrades a row. `isEncrypted` distinguishes the two by a `v1.` prefix.
+- **A blank token field now means "leave unchanged", not "delete".** The form can no longer pre-fill the saved value, so submitting the page after editing something else would otherwise have silently wiped the key. Removing one is deliberate, via `settings.disconnectApify`.
+
+**Rotating `CREDENTIALS_ENCRYPTION_KEY` makes every saved key unreadable** — users would have to re-enter them. There is no re-encryption path yet.
+
+Covered by `src/lib/crypto/secret-box.test.ts` (9 unit tests, including tamper detection and wrong-key rejection) and `src/credentials/credentials.integration.test.ts`, which reads the raw column directly to confirm ciphertext actually reaches the database — the failure mode here is a correct cipher that nothing calls.
+
 
 `user_settings.apifyApiToken` is a plain `text` column. Anyone with a database read — a leaked `DATABASE_URL`, a SQL injection anywhere, a Neon branch shared for debugging — gets every user's Apify credentials.
 
@@ -670,7 +722,7 @@ Worth stating plainly, because the list above is long and the work here is bette
 
 **Before you trust that scraping works:**
 
-6. **C4** — run both Apify actors manually, capture the real schemas, add Zod validation at the boundary
+6. ~~**C4** — run both Apify actors manually, capture the real schemas, add Zod validation at the boundary~~ — done 2026-08-18. The jobs actor was deleted rather than validated (dead code); the profile actor is validated defensively, since confirming its schema still needs a paid run.
 7. **M5** — unique constraint on leads
 8. **H2** — rate limit the four paid procedures
 

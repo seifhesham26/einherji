@@ -1,0 +1,10 @@
+CREATE TYPE "public"."usage_action" AS ENUM('generate_message', 'parse_cv', 'find_managers', 'scrape');--> statement-breakpoint
+CREATE TABLE "usage_events" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"action" "usage_action" NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "usage_events" ADD CONSTRAINT "usage_events_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "usage_events_user_action_time_idx" ON "usage_events" USING btree ("user_id","action","created_at");
