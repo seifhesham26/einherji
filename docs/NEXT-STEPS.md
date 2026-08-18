@@ -137,9 +137,7 @@ That's a working install. Everything below is optional.
 
 # Part 2 — What to do next
 
-## 7. Free signups — two more job sources, about 10 minutes
-
-Both are free. The code is written; only the key is missing.
+## 7. One free signup — a seventeenth job source, about 5 minutes
 
 **Keys are per-account**, entered under Settings → Source credentials. They're
 encrypted at rest and never sent back to the browser.
@@ -148,21 +146,11 @@ encrypted at rest and never sent back to the browser.
 > not the user. A shared key means every account draws down one quota, and an
 > account that never adds its own would silently spend yours.
 
-### Adzuna
+### Adzuna — free tier
 1. Sign up at https://developer.adzuna.com/signup
 2. Copy your **App ID** and **App Key**
 3. Settings → Source credentials → Adzuna → **Add key** → paste both → Save
 4. Enable `adzuna` in your job sources
-
-### Reddit
-1. https://www.reddit.com/prefs/apps → **create another app…**
-2. Choose type **script**. Redirect URI can be `http://localhost:3000`.
-3. Copy the **client id** (the string under the app name) and the **secret**
-4. Settings → Source credentials → Reddit → **Add key** → paste both → Save
-5. Enable `reddit` — this pulls freelance gigs from r/forhire, r/jobbit,
-   r/remotejs and r/hiring
-
-> Unauthenticated Reddit JSON returns 403, which is the only reason an app is needed.
 
 **Both halves of a pair must be filled in.** A source with half a key counts as not
 configured rather than sending a broken request — otherwise the failure looks like
@@ -170,6 +158,33 @@ a rejected key, which is a confusing thing to debug.
 
 Same route for the paid ones later: X and SerpAPI, and Apify under
 Settings → Integrations.
+
+### Reddit — ⛔ do not enable without written approval
+
+The adapter is built and tested, and it stays in the codebase. **It should not be
+switched on as things stand.** Reddit's
+[Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy)
+sets three conditions, and this app fails all three:
+
+1. **"You must request access and get explicit approval before accessing any
+   Reddit data through our API."** Approval is required for *all* access, not just
+   commercial.
+2. **Commercial use needs separate written approval.** Using this to find paying
+   clients for a development business is commercial.
+3. **"You must not sell, license, share, or otherwise commercialize Reddit data
+   without express written approval."** Message generation sends the job
+   description — which for a Reddit job is the post's body text — to OpenRouter,
+   and onward to the model provider. That's sharing Reddit data with third
+   parties, and it applies *even if the use were non-commercial*.
+
+Point 3 is structural rather than a missing feature: it's how message generation
+works for every source.
+
+**What you lose by skipping it:** very little. Freelancer.com and HN "Seeking
+Freelancer" cover the same freelance-gig ground with no comparable restrictions.
+
+If you ever want it: request approval through the policy page above, and describe
+the commercial use honestly. Then enable the source — no code changes needed.
 
 ## 8. The next thing worth building — assisted sending (free)
 

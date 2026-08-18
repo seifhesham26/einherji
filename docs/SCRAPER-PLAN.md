@@ -38,7 +38,7 @@ Company boards need a slug from your target list. Everything else searches by yo
 
 - **Upwork's RSS feeds are gone** (410). There is no free Upwork access; the API requires partner approval. Freelancer.com is the working substitute.
 - **Indeed has no public API.** Adzuna covers similar ground with a free key and is the practical stand-in. Indeed/Glassdoor/Wellfound all serve JS shells or block datacenter IPs and would need an unblocking proxy — the `scrapingProxyProvider` setting exists for this, but no proxy-backed source is wired up yet.
-- **Reddit is free** with an OAuth app (100 queries/min); the unauthenticated JSON endpoints now 403.
+- **Reddit is free of charge but not free to use.** The unauthenticated JSON endpoints 403, and the Responsible Builder Policy requires explicit approval for *any* API access, separate written approval for commercial use, and forbids sharing Reddit data with third parties — which message generation does, via OpenRouter. The adapter is built but must stay disabled. See `docs/paid-services/README.md`.
 - **RemoteOK requires attribution** as a condition of API access — a *followed* link back. Stored per-job in `attributionText`/`attributionUrl` and rendered on the job card. Don't add `nofollow`.
 - **HN threads** are parsed from the monthly "Who is Hiring" (`whoishiring`) and "Seeking Freelancer" (`jon_north`) posts. Only top-level comments are postings; replies are filtered out. The freelance source keeps only "SEEKING FREELANCER" posts — "SEEKING WORK" posts are other freelancers, not clients.
 

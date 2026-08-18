@@ -167,14 +167,19 @@ export const SOURCE_DEFINITIONS: SourceDefinition[] = [
     id: "reddit",
     name: "Reddit",
     tier: "aggregator",
+    // Reddit's Responsible Builder Policy requires explicit approval before any
+    // API access, separate written approval for commercial use, and forbids
+    // sharing Reddit data with third parties. Message generation sends the job
+    // description to OpenRouter, so this source can't be used as the app is built
+    // without that approval. Code is kept and working for if approval is granted.
     description:
-      "r/forhire, r/jobbit and similar. Needs a free OAuth app — the public JSON endpoints now reject unauthenticated traffic.",
-    signupUrl: "https://www.reddit.com/prefs/apps",
+      "r/forhire, r/jobbit and similar. Requires Reddit's written approval before use — see docs/paid-services/README.md.",
+    signupUrl: "https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy",
     credentialFields: [
       { key: "clientId", label: "Client ID", placeholder: "abc123", isSecret: false },
       { key: "clientSecret", label: "Client Secret", placeholder: "…", isSecret: true },
     ],
-    costNote: "Free — 100 queries/min with an OAuth app",
+    costNote: "Approval required — not usable without it",
   },
   {
     id: "twitter",

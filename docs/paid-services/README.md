@@ -34,9 +34,9 @@ All 16 are verified live by the canary suite (`npm run test:canary`).
 
 ---
 
-## Two of these are free — do them whenever you like
+## One of these is free — do it whenever you like
 
-They're on this list only because they need a signup, not money.
+It's on this list only because it needs a signup, not money.
 
 **Every key here is per-account**, entered under Settings → Source credentials and
 encrypted at rest. There is deliberately no server-wide environment fallback:
@@ -48,11 +48,37 @@ account's scraping spends another's quota.
 - **Sign up:** https://developer.adzuna.com/signup
 - **Code status:** ✅ done. Save `appId` + `apiKey` under Settings → Source credentials.
 
-### Reddit — free with an OAuth app
-- **Unlocks:** r/forhire, r/jobbit, r/remotejs, r/hiring — freelance gigs, tagged `workType: freelance`.
-- **Sign up:** https://www.reddit.com/prefs/apps (create a "script" app)
-- **Code status:** ✅ done. Save `clientId` + `clientSecret` under Settings → Source credentials.
-- **Note:** unauthenticated Reddit JSON returns 403, which is why the app is needed at all.
+---
+
+## Blocked on permission, not money
+
+### Reddit — ⛔ approval required, do not enable
+
+The adapter is written and tested. **It should not be switched on as things stand.**
+
+Reddit's [Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy)
+sets three conditions and this app fails all three:
+
+1. **Approval is required for all API access** — "You must request access and get
+   explicit approval before accessing any Reddit data through our API." Not just
+   commercial use.
+2. **Commercial use needs separate written approval.** Finding paying clients for
+   a development business is commercial.
+3. **Sharing Reddit data with third parties is prohibited** without express written
+   approval. Message generation sends the job description — for a Reddit job, the
+   post's body — to OpenRouter and onward to the model provider. This one applies
+   *even if the use were non-commercial*, and it's structural: it's how message
+   generation works for every source.
+
+**Cost of skipping it:** low. Freelancer.com and HN "Seeking Freelancer" cover the
+same freelance-gig ground with no comparable restrictions.
+
+**If you want it:** request approval via the policy page, describing the commercial
+use honestly. No code changes needed afterwards — just enable the source.
+
+> A correction worth recording: this was originally listed here as "free, do it
+> whenever". That was right about *price* and wrong about *permission* — the cost
+> note came from the source registry, which tracks money, not terms.
 
 ---
 
@@ -100,7 +126,7 @@ Ordered by what I'd buy first for the money.
 
 ## When money arrives, in this order
 
-1. **Adzuna + Reddit** — £0, today. More sources for a signup form.
+1. **Adzuna** — £0, today. One more source for a signup form.
 2. **QStash** — likely free, and it unlocks the scraper you already paid for in effort.
 3. **Apify credits** — makes Find Managers real.
 4. **Email finding** — only after reading the decision doc; the free option may be enough.
