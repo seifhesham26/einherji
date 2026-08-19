@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import JobCard from "./job-card";
+import BucketBar from "./bucket-bar";
 import { useGetJobs } from "@/hooks/jobs/useGetJobs";
 import { useScrapeJobs } from "@/hooks/jobs/useScrapeJobs";
 import type { Job } from "@/types/job";
@@ -14,8 +15,11 @@ import type { Job } from "@/types/job";
 export default function JobsList() {
   const [search, setSearch] = useState("");
   const [unprocessedOnly, setUnprocessedOnly] = useState(false);
+  const [bucketId, setBucketId] = useState<string | null>(null);
 
-  const { data: jobs = [] as Job[], isLoading } = useGetJobs();
+  const { data: jobs = [] as Job[], isLoading } = useGetJobs({
+    bucketId: bucketId ?? undefined,
+  });
   const scrapeJobs = useScrapeJobs();
 
   const filtered = jobs.filter((job) => {
@@ -31,17 +35,21 @@ export default function JobsList() {
 
   return (
     <div className="space-y-6">
+      <BucketBar selectedBucketId={bucketId} onSelect={setBucketId} />
+
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Jobs</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Scraped LinkedIn jobs matching your criteria.
+            {bucketId
+              ? "Results for this bucket."
+              : "Everything found across all your buckets."}
           </p>
         </div>
         <Button
           size="sm"
-          onClick={() => scrapeJobs.mutate({})}
+          onClick={() => scrapeJobs.mutate(bucketId ? { bucketId } : {})}
           disabled={scrapeJobs.isPending}
           className="gap-2 shrink-0"
         >

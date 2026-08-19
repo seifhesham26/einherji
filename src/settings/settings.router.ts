@@ -4,6 +4,8 @@ import {
   updateProfileSchema,
   updateIntegrationsSchema,
   updateJobSourcesSchema,
+  updateDigestSchema,
+  updateTelegramSchema,
 } from "./settings.validators";
 import {
   disconnectApify,
@@ -11,6 +13,8 @@ import {
   updateProfile,
   updateIntegrations,
   updateJobSources,
+  updateDigest,
+  connectTelegram,
 } from "./settings.service";
 
 export const settingsRouter = createTRPCRouter({
@@ -33,6 +37,18 @@ export const settingsRouter = createTRPCRouter({
   disconnectApify: protectedProcedure.mutation(async ({ ctx }) => {
     return disconnectApify(db, ctx.session.user.id);
   }),
+
+  updateDigest: protectedProcedure
+    .input(updateDigestSchema)
+    .mutation(async ({ input, ctx }) => {
+      return updateDigest(db, ctx.session.user.id, input);
+    }),
+
+  connectTelegram: protectedProcedure
+    .input(updateTelegramSchema)
+    .mutation(async ({ input, ctx }) => {
+      return connectTelegram(db, ctx.session.user.id, input);
+    }),
 
   updateJobSources: protectedProcedure
     .input(updateJobSourcesSchema)

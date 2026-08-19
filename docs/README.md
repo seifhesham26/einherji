@@ -6,6 +6,7 @@
 >
 > **Current docs:**
 > - **[NEXT-STEPS.md](./NEXT-STEPS.md)** — start here: setup, then what to do next
+> - **[SETUP-CHECKLIST.md](./SETUP-CHECKLIST.md)** — every account and key, with tickboxes for what's done
 > - **[PRODUCT-DIRECTION.md](./PRODUCT-DIRECTION.md)** — opinionated analysis of the workflow, the two goals, and the SaaS question
 > - **[AUDIT.md](./AUDIT.md)** — accurate review of what actually exists, what's broken, and what to fix first
 > - **[SCRAPER-PLAN.md](./SCRAPER-PLAN.md)** — plan for replacing Apify with a self-hosted scraper

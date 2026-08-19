@@ -14,6 +14,7 @@ import {
 import { linkedInJobSource } from "@/lib/scrapers/linkedin/search-jobs";
 import { matchesQuery } from "@/lib/scrapers/aggregators/match-query";
 import { getSourceDefinition } from "@/lib/scrapers/source-registry";
+import { requireBucket } from "@/buckets/buckets.service";
 import { consumeQuota } from "@/usage/usage.service";
 import type {
   JobSearchQuery,
@@ -93,7 +94,15 @@ export async function startScrape(db: Database, userId: string, input: StartScra
     getResolvedCompanies(db, userId),
   ]);
 
-  const sources = resolveSources(input.sources, settings?.jobSources);
+  // A bucket carries its own search. When one is named it replaces the
+  // account-level criteria entirely — "React Developer" and "engineering firms in
+  // Cairo" are different hunts and must not share a keyword list.
+  const bucket = input.bucketId ? await requireBucket(db, userId, input.bucketId) : null;
+
+  const sources = resolveSources(
+    input.sources ?? (bucket?.sources.length ? (bucket.sources as JobSourceName[]) : undefined),
+    settings?.jobSources,
+  );
   const boardSources = sources.filter(isAtsProvider);
   const aggregatorSources = sources.filter(isAggregatorSource);
   const wantsLinkedIn = sources.includes("linkedin_guest");
@@ -105,12 +114,17 @@ export async function startScrape(db: Database, userId: string, input: StartScra
       boardSources.includes(company.atsProvider as never),
   );
 
-  // Aggregators and LinkedIn both search by keyword, so they need criteria.
-  const needsCriteria = wantsLinkedIn || aggregatorSources.length > 0;
-  if (needsCriteria && !activeCriteria) {
+  // Aggregators and LinkedIn both search by keyword, so they need one from
+  // somewhere — the bucket if there is one, otherwise the account's criteria.
+  const keywords = bucket ? bucket.keywords : (activeCriteria?.titles ?? []);
+  const needsKeywords = wantsLinkedIn || aggregatorSources.length > 0;
+
+  if (needsKeywords && keywords.length === 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "No active criteria found. Set up your search criteria first.",
+      message: bucket
+        ? `"${bucket.name}" has no keywords yet. Add some so there's something to search for.`
+        : "No active criteria found. Set up your search criteria first.",
     });
   }
 
@@ -126,9 +140,9 @@ export async function startScrape(db: Database, userId: string, input: StartScra
   }
 
   const query: JobSearchQuery = {
-    titles: activeCriteria?.titles ?? [],
-    locations: activeCriteria?.locations ?? [],
-    salaryMin: activeCriteria?.salaryMin ?? undefined,
+    titles: keywords,
+    locations: bucket ? bucket.locations : (activeCriteria?.locations ?? []),
+    salaryMin: bucket ? undefined : (activeCriteria?.salaryMin ?? undefined),
     workTypes: (input.workTypes as WorkType[] | undefined) ?? undefined,
   };
 
@@ -160,7 +174,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
   try {
     for (const company of companiesInScope) {
       if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
-      await runBoardTask(db, userId, run.id, company, query, abortController.signal, taskErrors);
+      await runBoardTask(db, userId, run.id, company, query, bucket?.id ?? null, abortController.signal, taskErrors);
     }
 
     for (const source of aggregatorSources) {
@@ -171,6 +185,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
         run.id,
         source,
         query,
+        bucket?.id ?? null,
         abortController.signal,
         taskErrors,
       );
@@ -179,7 +194,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
     if (wantsLinkedIn && activeCriteria) {
       if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
       const existingSourceJobIds = await getExistingSourceJobIds(db, userId, "linkedin_guest");
-      await runLinkedInTask(db, userId, run.id, query, existingSourceJobIds, abortController.signal);
+      await runLinkedInTask(db, userId, run.id, query, existingSourceJobIds, bucket?.id ?? null, abortController.signal);
     }
 
     // Hitting the time budget isn't a failure — everything found before the cutoff
@@ -250,6 +265,7 @@ async function runBoardTask(
   runId: string,
   company: { name: string; atsProvider: string | null; atsSlug: string | null },
   query: JobSearchQuery,
+  bucketId: string | null,
   signal: AbortSignal,
   taskErrors: string[],
 ) {
@@ -268,7 +284,7 @@ async function runBoardTask(
     // always filtered on the user's criteria; boards did not, so tracking one
     // large company buried every other source in noise.
     const relevant = scraped.filter((job) => matchesQuery(job, query));
-    const inserted = await insertJobs(db, userId, relevant);
+    const inserted = await insertJobs(db, userId, relevant, bucketId);
 
     await recordTaskProgress(db, runId, {
       jobsFound: relevant.length,
@@ -288,6 +304,7 @@ async function runAggregatorTask(
   runId: string,
   source: JobSourceName,
   query: JobSearchQuery,
+  bucketId: string | null,
   signal: AbortSignal,
   taskErrors: string[],
 ) {
@@ -304,7 +321,7 @@ async function runAggregatorTask(
       : null;
 
     const scraped = await fetchAggregatorJobs(source, query, credentials, signal);
-    const inserted = await insertJobs(db, userId, scraped);
+    const inserted = await insertJobs(db, userId, scraped, bucketId);
 
     await recordTaskProgress(db, runId, {
       jobsFound: scraped.length,
@@ -322,6 +339,7 @@ async function runLinkedInTask(
   runId: string,
   query: JobSearchQuery,
   existingSourceJobIds: Set<string>,
+  bucketId: string | null,
   signal: AbortSignal,
 ) {
   let found = 0;
@@ -330,7 +348,7 @@ async function runLinkedInTask(
 
   const flush = async () => {
     if (batch.length === 0) return;
-    const written = await insertJobs(db, userId, batch);
+    const written = await insertJobs(db, userId, batch, bucketId);
     inserted += written.length;
     batch = [];
   };

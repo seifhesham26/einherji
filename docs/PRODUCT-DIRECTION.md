@@ -205,6 +205,82 @@ before touching infrastructure.
 
 ---
 
+## 6. Second pass — what's missing (checked 2026-08-18)
+
+A later sweep over parts I hadn't examined. Ordered by how much they cost you.
+
+### The product's central promise isn't implemented
+
+**Nothing runs automatically.** No cron, no `vercel.json`, no scheduled anything.
+The landing page says "on autopilot"; the truth is you open the app and click
+Scrape.
+
+For a job hunt this is *the* value proposition. Postings are time-sensitive and
+early applicants win. If you have to remember to check, you've built a slower way
+to browse job boards.
+
+**And nothing tells you when something appears.** Resend is wired for account
+verification only. So even with a cron you'd still have to open the app to find
+out anything happened.
+
+Those two together are the product:
+
+> Every morning: "here are the 5 new jobs worth your time."
+
+Right now it's a database you have to remember to query. Cron + digest is a small
+amount of work and it's the difference between a tool and a service.
+
+### You can't triage what it finds
+
+- **No relevance ranking.** `matchesQuery` is binary — a job either matches or it
+  doesn't, and the list is ordered by date. With hundreds of rows all equally
+  "matching", there's no way to see the good ones first. A score (matched terms,
+  recency, salary fit, remote) is cheap and would change how usable this is.
+- **Nothing goes stale.** Postings die in 30–60 days and nothing expires or flags
+  them. In three months the Jobs page is mostly filled roles you can't distinguish
+  from live ones.
+- **No job status** — no applied / dismissed, so you re-read the same rows forever.
+
+### The generated message is aimed at the wrong place
+
+All three templates in `lib/ai/client.ts` say *"Write a LinkedIn message"*. But
+Find Managers is blocked, sending is manual, and the real channels are email for
+agency work and **WhatsApp for Egyptian B2B**. There's no channel parameter and
+**no language parameter** — for your dad's customers it would write English to an
+Arabic-speaking engineering office.
+
+### The dashboard measures effort, not results
+
+"Jobs scraped today" and "Managers found" are activity counters. The number that
+decides whether any of this works is **sent → replied**, and it isn't shown.
+"Approved today" is now actively misleading, since approving no longer means sent.
+
+### No error tracking
+
+Sentry is in `CLAUDE.md`'s stack list and nowhere in the code. Scrape failures now
+surface in the run summary — but only if you're looking at it. Unattended, a
+source can break for weeks silently.
+
+### A correction to section 2
+
+I said adding a Places source would be "an adapter, not a rewrite". That was
+slightly optimistic. `ScrapedJob` is job-shaped — `salary`, `workType`, `postedAt`
+are meaningless for a business prospect, and there is **nowhere to put a phone
+number**, which is the single most important field for Egyptian B2B outreach. The
+fetching layer is reusable; the entity needs widening or a sibling.
+
+### What I'd add, in order
+
+1. **Vercel Cron → daily scrape.** Turns it on.
+2. **Daily digest email.** Closes the loop. Resend is already configured.
+3. **Relevance score.** So the digest can say "top 5", not "247 new".
+4. **Job status** — applied / dismissed.
+5. **Channel + language on message generation.** Unblocks your dad's use case and
+   the agency one; both are non-English or non-LinkedIn.
+6. **Sentry**, before anyone but you relies on it.
+
+Items 1–3 are the ones that change what this *is*.
+
 ## The one-line version
 
 You've built a good job-hunting tool and a genuinely solid platform underneath it.

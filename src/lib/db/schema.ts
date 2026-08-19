@@ -113,6 +113,15 @@ export const workTypeEnum = pgEnum("work_type", [
   "unknown",
 ]);
 
+// What a bucket is hunting for. Drives the wording, the sensible default
+// sources, and which template the message generator reaches for.
+export const bucketKindEnum = pgEnum("bucket_kind", [
+  "jobs",       // roles for yourself
+  "clients",    // businesses that might buy what you build
+  "suppliers",  // businesses you want to buy from
+  "custom",
+]);
+
 export const scrapeStatusEnum = pgEnum("scrape_status", [
   "queued",
   "running",
@@ -157,6 +166,10 @@ export const jobs = pgTable("jobs", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
 
+  // Which hunt turned this up. Nullable: rows predating buckets keep working and
+  // show under "All".
+  bucketId: text("bucket_id").references(() => buckets.id, { onDelete: "cascade" }),
+
   source: jobSourceEnum("source").notNull().default("apify"),
   // NOT NULL matters: Postgres treats NULLs as distinct in unique indexes, so a
   // nullable id would silently defeat the dedupe below and duplicate every scrape.
@@ -186,6 +199,7 @@ export const jobs = pgTable("jobs", {
   // and the same id can repeat across sources.
   uniqueIndex("jobs_user_source_id_idx").on(table.userId, table.source, table.sourceJobId),
   index("jobs_user_processed_idx").on(table.userId, table.isProcessed),
+  index("jobs_bucket_idx").on(table.bucketId),
 ]);
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
@@ -251,9 +265,58 @@ export const userSettings = pgTable("user_settings", {
   scrapingProxyProvider: text("scraping_proxy_provider"),
   scrapingProxyApiKey: text("scraping_proxy_api_key"),
 
+  // ── Daily run ──
+  // Opt-in, and off by default: the cron spends the account's own scrape quota
+  // and messages them, so it has to be asked for rather than assumed.
+  dailyDigestEnabled: boolean("daily_digest_enabled").notNull().default(false),
+  // Where the digest goes. An array rather than booleans so a third channel
+  // doesn't need another column — same shape as jobSources.
+  digestChannels: text("digest_channels").array().notNull().default(["email"]),
+  // Telegram bot credentials, per account. The token is encrypted at rest like
+  // every other third-party key; the chat id is not a secret.
+  telegramBotToken: text("telegram_bot_token"),
+  telegramChatId: text("telegram_chat_id"),
+  // The window boundary for the next digest, and what stops a re-run of the cron
+  // sending the same jobs twice.
+  lastDigestSentAt: timestamp("last_digest_sent_at"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // The cron's own lookup: every account that wants a daily run.
+  index("user_settings_digest_idx").on(table.dailyDigestEnabled),
+]);
+
+// ─── Buckets ──────────────────────────────────────────────────────────────────
+// A named search with its own keywords, places and sources. One account runs
+// several unrelated hunts at once — a job search, client prospecting, supplier
+// sourcing — and a single set of criteria can't serve them: "React Developer"
+// and "engineering firms in Cairo" are not the same query.
+
+export const buckets = pgTable("buckets", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  name: text("name").notNull(),
+  kind: bucketKindEnum("kind").notNull().default("jobs"),
+
+  // The search itself. Named "keywords" rather than "titles" because only the
+  // jobs kind is looking for a job title.
+  keywords: text("keywords").array().notNull().default([]),
+  locations: text("locations").array().notNull().default([]),
+  sources: text("sources").array().notNull().default([]),
+
+  // What this bucket is offering, in its own words — the sender background for
+  // generated messages. A paper factory pitches nothing like a developer does.
+  pitch: text("pitch"),
+
+  isArchived: boolean("is_archived").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("buckets_user_name_idx").on(table.userId, table.name),
+  index("buckets_user_archived_idx").on(table.userId, table.isArchived),
+]);
 
 // ─── Tracked Companies ────────────────────────────────────────────────────────
 // Companies whose ATS job board we poll directly. ATS APIs are keyed by slug —

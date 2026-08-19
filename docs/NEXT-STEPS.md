@@ -52,6 +52,7 @@ the field rather than surfacing as a confusing runtime error later.
 | Variable | Purpose |
 |---|---|
 | `CREDENTIALS_ENCRYPTION_KEY` | Encrypts stored API keys at rest (AES-256-GCM) |
+| `CRON_SECRET` | Authenticates the daily run. Without it that endpoint returns 503. |
 
 Generate both secrets:
 
@@ -118,6 +119,29 @@ Then in the browser:
 
 That's a working install. Everything below is optional.
 
+## 5b. Turn on the daily run
+
+Settings → **Daily run** → Turn on. From then on the app scrapes your sources at
+06:00 UTC and emails you the top 5 matches. Nothing is sent on a day with no new
+jobs — a daily "nothing today" is how a digest ends up in spam.
+
+It spends one of your 50 daily scrapes and uses your own criteria and sources.
+
+**Where it goes — pick either or both:**
+
+- **Email** — Resend's free tier is 3,000/month and you'll send about 30. You don't
+  even need a domain: leave `RESEND_FROM_EMAIL` unset and it sends from
+  `onboarding@resend.dev` to your own account address. Just set `RESEND_API_KEY`.
+  Without it the digest is logged to the server console, which is fine for testing.
+- **Telegram** — free, no limits, no domain, no spam folder, and it lands on your
+  phone. Message [@BotFather](https://t.me/BotFather) → `/newbot` for a token, then
+  message your new bot once and open `api.telegram.org/bot<token>/getUpdates` to
+  find your chat id. Paste both into Settings and it **sends a test message
+  immediately** — if the setup is wrong you find out then, not at 6am.
+
+The bot token is encrypted at rest like every other key and never reaches the
+browser. Locally there's no cron, so the schedule only runs on Vercel.
+
 ## 6. Deploying to Vercel
 
 1. Add all six variables from section 3 under
@@ -125,13 +149,26 @@ That's a working install. Everything below is optional.
 2. Use the **same** `CREDENTIALS_ENCRYPTION_KEY` as local, or keys already saved
    through your local install won't decrypt in production.
 3. Point `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` at the deployed URL, not localhost.
-4. Run the migrations against production:
+4. **Add `CRON_SECRET`** — the daily run won't work without it, and the endpoint
+   refuses to run rather than accepting anonymous requests:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   ```
+
+   Vercel sends it as a bearer token automatically. `vercel.json` already
+   registers the schedule.
+5. Run the migrations against production:
 
    ```bash
    DATABASE_URL="<your production connection string>" npm run db:migrate
    ```
 
-5. Deploy.
+6. Deploy. Check the run at Vercel → your project → Cron Jobs.
+
+> The Hobby plan caps functions at 60s and allows one cron per day; the digest
+> keeps its own 4-minute ceiling and stops cleanly rather than being killed
+> mid-account. On Hobby, keep the source list short enough to finish inside 60s.
 
 ---
 

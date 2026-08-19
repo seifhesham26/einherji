@@ -43,6 +43,27 @@
       "when": 1787010759849,
       "tag": "0005_dusty_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787146060780,
+      "tag": "0006_vengeful_zeigeist",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787147343797,
+      "tag": "0007_thankful_kang",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787148033479,
+      "tag": "0008_dry_lake",
+      "breakpoints": true
     }
   ]
 }

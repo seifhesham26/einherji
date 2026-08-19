@@ -19,6 +19,10 @@ const serverEnvSchema = z.object({
   // without it — the failure is raised when a secret is actually read or written,
   // which fails closed at the point that matters instead of taking down the app.
   CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),
+  // Vercel Cron sends this as a bearer token. Optional here so the app boots
+  // without it; the cron route itself refuses to run when it's missing, which
+  // fails closed at the only place it matters.
+  CRON_SECRET: z.string().optional(),
 
 });
 

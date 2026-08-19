@@ -12,6 +12,9 @@ export const scrapeStatusValues = [
 export const scrapeStatusSchema = z.enum(scrapeStatusValues);
 
 export const startScrapeSchema = z.object({
+  // Run one bucket's search. Its keywords, locations and sources take over from
+  // the account-level criteria, and results are filed under it.
+  bucketId: z.string().min(1).optional(),
   // Omitted means "use whatever the user configured in Settings".
   sources: z.array(jobSourceNameSchema).min(1).optional(),
   // Narrows a run to particular engagement types — freelancers want gigs, not

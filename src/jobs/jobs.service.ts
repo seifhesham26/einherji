@@ -8,7 +8,7 @@ import { consumeQuota } from "@/usage/usage.service";
 import type { GetJobsInput } from "./jobs.validators";
 
 export async function fetchJobs(db: Database, userId: string, input: GetJobsInput) {
-  return getAllJobs(db, userId, input.processed);
+  return getAllJobs(db, userId, { processed: input.processed, bucketId: input.bucketId });
 }
 
 /**

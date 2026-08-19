@@ -13,6 +13,7 @@ function decryptSecrets(settings: SettingsRow): SettingsRow {
     ...settings,
     apifyApiToken: decryptOptionalSecret(settings.apifyApiToken),
     scrapingProxyApiKey: decryptOptionalSecret(settings.scrapingProxyApiKey),
+    telegramBotToken: decryptOptionalSecret(settings.telegramBotToken),
   };
 }
 
@@ -38,6 +39,9 @@ export async function upsertUserSettings(
       : {}),
     ...("scrapingProxyApiKey" in data
       ? { scrapingProxyApiKey: encryptOptionalSecret(data.scrapingProxyApiKey) }
+      : {}),
+    ...("telegramBotToken" in data
+      ? { telegramBotToken: encryptOptionalSecret(data.telegramBotToken) }
       : {}),
   };
 

@@ -2,6 +2,6 @@
 
 import { trpc } from "@/lib/trpc-client";
 
-export function useGetJobs(processed?: boolean) {
-  return trpc.jobs.getAll.useQuery({ processed });
+export function useGetJobs(filters: { processed?: boolean; bucketId?: string } = {}) {
+  return trpc.jobs.getAll.useQuery(filters);
 }

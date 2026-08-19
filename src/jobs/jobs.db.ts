@@ -3,13 +3,20 @@ import type { Database } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { dedupeBySourceJobId, type ScrapedJob } from "@/lib/scrapers/job-source.types";
 
-export async function getAllJobs(db: Database, userId: string, processed?: boolean) {
-  const whereClause =
-    processed === undefined
-      ? eq(jobs.userId, userId)
-      : and(eq(jobs.userId, userId), eq(jobs.isProcessed, processed));
+export async function getAllJobs(
+  db: Database,
+  userId: string,
+  filters: { processed?: boolean; bucketId?: string } = {},
+) {
+  const conditions = [eq(jobs.userId, userId)];
+  if (filters.processed !== undefined) conditions.push(eq(jobs.isProcessed, filters.processed));
+  if (filters.bucketId) conditions.push(eq(jobs.bucketId, filters.bucketId));
 
-  return db.select().from(jobs).where(whereClause).orderBy(desc(jobs.postedAt));
+  return db
+    .select()
+    .from(jobs)
+    .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+    .orderBy(desc(jobs.postedAt));
 }
 
 export async function getJobById(db: Database, userId: string, jobId: string) {
@@ -40,7 +47,12 @@ export async function getExistingSourceJobIds(
   return new Set(rows.map((row) => row.sourceJobId));
 }
 
-export async function insertJobs(db: Database, userId: string, scrapedJobs: ScrapedJob[]) {
+export async function insertJobs(
+  db: Database,
+  userId: string,
+  scrapedJobs: ScrapedJob[],
+  bucketId?: string | null,
+) {
   // Belt and braces: sources dedupe their own output, but a duplicate reaching
   // the insert would make the returned count — and so the run's stats — wrong.
   const uniqueJobs = dedupeBySourceJobId(scrapedJobs);
@@ -51,6 +63,7 @@ export async function insertJobs(db: Database, userId: string, scrapedJobs: Scra
     .values(
       uniqueJobs.map((job) => ({
         userId,
+        bucketId: bucketId ?? null,
         source: job.source,
         sourceJobId: job.sourceJobId,
         title: job.title,

@@ -1,7 +1,11 @@
+import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
+import { sendTelegramMessage } from "@/lib/telegram";
 import { maskSecret } from "@/utils/mask-secret";
 import { getSettingsByUserId, upsertUserSettings } from "./settings.db";
 import type {
+  UpdateDigestInput,
+  UpdateTelegramInput,
   UpdateIntegrationsInput,
   UpdateJobSourcesInput,
   UpdateProfileInput,
@@ -20,13 +24,14 @@ export async function getUserSettings(db: Database, userId: string) {
   const settings = await getSettingsByUserId(db, userId);
   if (!settings) return null;
 
-  const { apifyApiToken, scrapingProxyApiKey, ...safeSettings } = settings;
+  const { apifyApiToken, scrapingProxyApiKey, telegramBotToken, ...safeSettings } = settings;
 
   return {
     ...safeSettings,
     hasApifyApiToken: Boolean(apifyApiToken),
     apifyApiTokenPreview: apifyApiToken ? maskSecret(apifyApiToken) : null,
     hasScrapingProxyApiKey: Boolean(scrapingProxyApiKey),
+    hasTelegramBotToken: Boolean(telegramBotToken),
   };
 }
 
@@ -56,6 +61,48 @@ export async function updateIntegrations(db: Database, userId: string, input: Up
 
 export async function disconnectApify(db: Database, userId: string) {
   await upsertUserSettings(db, userId, { apifyApiToken: null });
+  return getUserSettings(db, userId);
+}
+
+export async function updateDigest(db: Database, userId: string, input: UpdateDigestInput) {
+  await upsertUserSettings(db, userId, {
+    ...(input.dailyDigestEnabled !== undefined
+      ? { dailyDigestEnabled: input.dailyDigestEnabled }
+      : {}),
+    ...(input.digestChannels !== undefined ? { digestChannels: input.digestChannels } : {}),
+  });
+  return getUserSettings(db, userId);
+}
+
+/**
+ * Saves Telegram credentials and proves they work before storing them.
+ *
+ * Sending a test message first is the difference between finding out now and
+ * finding out at 6am tomorrow when nothing arrives. "chat not found" — the usual
+ * mistake, from never having messaged the bot — is reported as itself.
+ */
+export async function connectTelegram(db: Database, userId: string, input: UpdateTelegramInput) {
+  const botToken = input.telegramBotToken?.trim();
+  const chatId = input.telegramChatId?.trim();
+
+  if (!botToken || !chatId) {
+    await upsertUserSettings(db, userId, { telegramBotToken: null, telegramChatId: null });
+    return getUserSettings(db, userId);
+  }
+
+  try {
+    await sendTelegramMessage(
+      { botToken, chatId },
+      "<b>AI Job Hunter</b> is connected. Your daily digest will arrive here.",
+    );
+  } catch (error) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: error instanceof Error ? error.message : "Couldn't reach Telegram.",
+    });
+  }
+
+  await upsertUserSettings(db, userId, { telegramBotToken: botToken, telegramChatId: chatId });
   return getUserSettings(db, userId);
 }
 

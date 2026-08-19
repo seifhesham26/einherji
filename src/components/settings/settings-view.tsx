@@ -3,6 +3,7 @@
 import { Separator } from "@/components/ui/separator";
 import ProfileSection from "./profile-section";
 import JobSourcesSection from "./job-sources-section";
+import DailyRunSection from "./daily-run-section";
 import SourceCredentialsSection from "./source-credentials-section";
 import IntegrationsSection from "./integrations-section";
 
@@ -21,6 +22,10 @@ export default function SettingsView() {
       <Separator />
 
       <JobSourcesSection />
+
+      <Separator />
+
+      <DailyRunSection />
 
       <Separator />
 

@@ -1,4 +1,5 @@
 import { createTRPCRouter } from "@/server/trpc";
+import { bucketsRouter } from "@/buckets/buckets.router";
 import { companiesRouter } from "@/companies/companies.router";
 import { credentialsRouter } from "@/credentials/credentials.router";
 import { criteriaRouter } from "@/criteria/criteria.router";
@@ -10,6 +11,7 @@ import { settingsRouter } from "@/settings/settings.router";
 import { usageRouter } from "@/usage/usage.router";
 
 export const appRouter = createTRPCRouter({
+  buckets: bucketsRouter,
   companies: companiesRouter,
   credentials: credentialsRouter,
   criteria: criteriaRouter,
