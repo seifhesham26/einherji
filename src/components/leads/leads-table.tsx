@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetLeads } from "@/hooks/leads/useGetLeads";
+import AddLeadDialog from "./add-lead-dialog";
 import { useGenerateMessage } from "@/hooks/messages/useGenerateMessage";
 import { formatRelativeDate } from "@/utils/format-relative-date";
 import type { LeadStatus } from "@/leads/leads.validators";
@@ -70,9 +71,14 @@ export default function LeadsTable() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-xl font-semibold">Leads</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Hiring managers found for your target jobs.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Leads</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            People to reach out to about your target jobs.
+          </p>
+        </div>
+        <AddLeadDialog />
       </div>
 
       {/* Filters */}
@@ -112,15 +118,21 @@ export default function LeadsTable() {
           <div className="rounded-full bg-muted p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
-          <div>
-            <p className="text-sm font-medium">No leads yet</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Go to Jobs and click "Find Manager" to discover hiring contacts.
-            </p>
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium">No leads yet</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                Add the hiring manager or contact for a role you want, then generate a
+                message to them.
+              </p>
+            </div>
+            <div className="flex justify-center">
+              <AddLeadDialog />
+            </div>
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-border overflow-hidden">
+        <div className="rounded-xl border border-border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

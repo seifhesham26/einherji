@@ -50,7 +50,7 @@ export default function CompaniesTable() {
   }
 
   return (
-    <div className="rounded-xl border border-border overflow-hidden">
+    <div className="rounded-xl border border-border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>

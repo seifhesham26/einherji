@@ -22,9 +22,14 @@ export const weWorkRemotelySource: AggregatorSource = {
  * Pure function so it can be tested against a saved fixture. Note it reads the
  * URL from <guid>, not <link>: an HTML parser treats <link> as a void element
  * and drops its text, but <guid> carries the same canonical URL.
+ *
+ * The feed repeats a slug from time to time — the same posting listed under two
+ * categories. Deduped here, matching arbeitnow and themuse, so every adapter
+ * returns a unique set rather than relying on the caller to clean up after it.
  */
 export function parseWeWorkRemotelyFeed(xml: string): ScrapedJob[] {
   const { document } = parseHTML(xml);
+  const seenSlugs = new Set<string>();
 
   return [...document.querySelectorAll("item")]
     .map((item) => {
@@ -35,6 +40,11 @@ export function parseWeWorkRemotelyFeed(xml: string): ScrapedJob[] {
       const jobUrl = readTag("guid");
       if (!rawTitle || !jobUrl) return null;
 
+      // The slug is stable; the full URL is what guid contains.
+      const slug = jobUrl.split("/").filter(Boolean).pop() ?? jobUrl;
+      if (seenSlugs.has(slug)) return null;
+      seenSlugs.add(slug);
+
       const { company, title } = splitCompanyAndTitle(rawTitle);
       const region = readTag("region");
       const employmentType = readTag("type");
@@ -42,8 +52,7 @@ export function parseWeWorkRemotelyFeed(xml: string): ScrapedJob[] {
       const description = readTag("description");
 
       return parseScrapedJob({
-        // The slug is stable; the full URL is what guid contains.
-        sourceJobId: jobUrl.split("/").filter(Boolean).pop() ?? jobUrl,
+        sourceJobId: slug,
         source: "weworkremotely",
         title,
         company,

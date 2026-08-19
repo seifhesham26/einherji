@@ -31,7 +31,7 @@ export default function FollowUpReminders() {
       </CardHeader>
       <CardContent>
         {overdue.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No overdue follow-ups. You're on top of it!</p>
+          <p className="text-sm text-muted-foreground">No overdue follow-ups. You&apos;re on top of it!</p>
         ) : (
           <ul className="space-y-2">
             {overdue.map((lead) => (

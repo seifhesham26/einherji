@@ -13,6 +13,7 @@ import {
   Building2,
   LogOut,
 } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, signOut } from "@/lib/auth-client";
 
@@ -26,7 +27,12 @@ const navItems = [
   { href: "/tracker", label: "Tracker", icon: KanbanSquare },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
@@ -42,13 +48,37 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-56 shrink-0 border-r border-border bg-card flex flex-col h-screen sticky top-0">
+    <>
+      {/* Dimmed backdrop, mobile only — tapping it closes the drawer. */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
+
+      <aside
+        className={cn(
+          "w-56 shrink-0 border-r border-border bg-card flex flex-col h-screen",
+          // Off-canvas below md, a normal column from md up.
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
       {/* Logo */}
       <div className="px-4 py-5 border-b border-border flex items-center gap-2">
         <div className="rounded-md bg-primary/10 p-1 shrink-0">
           <BrainCircuit className="h-4 w-4 text-primary" />
         </div>
         <span className="text-sm font-semibold tracking-tight truncate">AI Job Hunter</span>
+        <button
+          onClick={onClose}
+          className="ml-auto shrink-0 text-muted-foreground hover:text-foreground md:hidden"
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Nav */}
@@ -57,6 +87,7 @@ export default function Sidebar() {
           <Link
             key={href}
             href={href}
+            onClick={onClose}
             className={cn(
               "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
               pathname === href || (href === "/dashboard" && pathname === "/")
@@ -74,6 +105,7 @@ export default function Sidebar() {
       <div className="px-2 pb-2">
         <Link
           href="/settings"
+          onClick={onClose}
           className={cn(
             "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
             pathname === "/settings"
@@ -105,6 +137,7 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

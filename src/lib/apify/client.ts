@@ -95,6 +95,26 @@ export class ApifyResponseError extends Error {
   }
 }
 
+/**
+ * Raised when the actor rejects our input rather than failing to run.
+ *
+ * This is AUDIT C4 arriving in practice. `curious_coder/linkedin-profile-scraper`
+ * requires `cookie` and `proxy`, and `cookie` means a live logged-in LinkedIn
+ * session — the actor drives LinkedIn as you. That's the one line the rest of
+ * this app deliberately stays behind: every job source uses logged-out, public
+ * endpoints precisely so nothing here depends on automating an authenticated
+ * session. Supplying a session cookie would put the user's LinkedIn account at
+ * risk of restriction, so it isn't implemented.
+ */
+export class ApifyInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApifyInputError";
+  }
+}
+
+const INPUT_REJECTION_PATTERN = /Input is not valid|is required/i;
+
 // Per-account only. There is deliberately no server-wide fallback: Apify bills
 // per run, so a shared token means one account's searches spend another's
 // credits — silently, because it would look like it was working.
@@ -117,12 +137,28 @@ export async function findHiringManagers(
   const targetTitles = getManagerTitles(jobTitle);
   const searchQuery = targetTitles.map((title) => `"${title}"`).join(" OR ");
 
-  const run = await apify.actor("curious_coder/linkedin-profile-scraper").call({
-    searchQuery: `(${searchQuery}) at ${company}`,
-    companyName: company,
-    location,
-    limit: MAX_MANAGERS_PER_JOB,
-  });
+  let run;
+  try {
+    run = await apify.actor("curious_coder/linkedin-profile-scraper").call({
+      searchQuery: `(${searchQuery}) at ${company}`,
+      companyName: company,
+      location,
+      limit: MAX_MANAGERS_PER_JOB,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Turn the actor's raw validation error into something that explains itself.
+    if (INPUT_REJECTION_PATTERN.test(message)) {
+      throw new ApifyInputError(
+        "Finding hiring managers isn't available. The LinkedIn profile actor now requires a " +
+          "logged-in LinkedIn session cookie, which this app deliberately doesn't use — " +
+          "automating an authenticated session risks your LinkedIn account. See " +
+          "docs/paid-services/README.md for the alternatives.",
+      );
+    }
+    throw error;
+  }
 
   const { items } = await apify.dataset(run.defaultDatasetId).listItems();
   const profiles = parseArrayLeniently(items, apifyProfileSchema);

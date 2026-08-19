@@ -102,7 +102,7 @@ export default function JobsList() {
             <p className="text-sm font-medium">No jobs found</p>
             {jobs.length === 0 && (
               <p className="text-xs text-muted-foreground mt-1">
-                Click "Scrape Jobs" to pull matching jobs from LinkedIn.
+                Click &quot;Scrape Jobs&quot; to pull matching jobs from your enabled sources.
               </p>
             )}
           </div>

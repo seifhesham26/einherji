@@ -186,25 +186,24 @@ Freelancer" cover the same freelance-gig ground with no comparable restrictions.
 If you ever want it: request approval through the policy page above, and describe
 the commercial use honestly. Then enable the source — no code changes needed.
 
-## 8. The next thing worth building — assisted sending (free)
+## 8. Sending — built, and it's manual by design
 
-This closes the last product gap. The app generates and approves messages, then
-stops: `sentAt` is never written and `sent` is a status nothing sets.
+Approve a draft, then open **Messages → Ready to send**: copy the text, open the
+contact's profile, send it yourself, and hit **Mark as sent**. That writes
+`sentAt` and moves the lead to `message_sent`.
 
-**Why not automated sending:** `leads.email` is never populated — the profile
-scraper returns no email addresses. Automating it needs a paid email-finding
-service *and* a warmed sending domain *and* a GDPR lawful basis. See
-[`paid-services/email-finding.md`](./paid-services/email-finding.md).
+Sending is manual because there is nothing to automate against: `leads.email` is
+never populated — the profile scraper returns no email addresses. Automating it
+needs a paid email-finding service, a warmed sending domain and a GDPR lawful
+basis. See [`paid-services/email-finding.md`](./paid-services/email-finding.md).
 
-**The free version, roughly:**
-1. A copy-to-clipboard button on each approved message
-2. A "Mark as sent" action → sets `status = 'sent'` and `sentAt = now()`
-3. Scope both to `userId` in the `WHERE` clause, like every other write
-4. Show sent messages in the tracker
+**Adding contacts is manual too.** Leads → **Add lead**. Automated hiring-manager
+discovery is blocked: the Apify actor now demands a logged-in LinkedIn session
+cookie, which this app deliberately doesn't use. Everything downstream works
+identically whether a lead was scraped or typed in.
 
-At around ten messages a week, hand-sending isn't the bottleneck — and you'd want
-to read a cold outreach message before it goes anyway. Build this, use it for a few
-weeks, and you'll know whether automation is worth paying for instead of guessing.
+> Approving no longer marks a lead as contacted. It used to, which meant the
+> tracker claimed outreach that hadn't happened. That now waits for the send.
 
 ## 9. When you have budget
 

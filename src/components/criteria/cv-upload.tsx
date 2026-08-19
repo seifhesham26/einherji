@@ -19,17 +19,34 @@ export default function CvUpload({ onExtracted, model }: CvUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  // Upload failures used to be invisible: the spinner stopped and nothing else
+  // happened, which is indistinguishable from the button not working.
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractFromCv = useExtractFromCv();
 
   const { startUpload } = useUploadThing("cvUploader", {
-    onUploadBegin: () => setIsUploading(true),
+    onUploadBegin: () => {
+      setUploadError(null);
+      setIsUploading(true);
+    },
     onClientUploadComplete: () => setIsUploading(false),
-    onUploadError: () => setIsUploading(false),
+    onUploadError: (error) => {
+      setIsUploading(false);
+      setUploadError(error.message || "Upload failed. Check your connection and try again.");
+    },
   });
 
   function handleFile(selected: File | null) {
-    if (!selected || selected.type !== "application/pdf") return;
+    if (!selected) return;
+
+    // Silently ignoring the wrong file type looks like a broken drop zone.
+    if (selected.type !== "application/pdf") {
+      setUploadError(`${selected.name} isn't a PDF. Export your CV as a PDF and try again.`);
+      return;
+    }
+
+    setUploadError(null);
     setFile(selected);
   }
 
@@ -41,14 +58,31 @@ export default function CvUpload({ onExtracted, model }: CvUploadProps) {
 
   async function handleExtract() {
     if (!file) return;
+    setUploadError(null);
 
-    const uploaded = await startUpload([file]);
-    const url = uploaded?.[0]?.url;
-    if (!url) return;
+    try {
+      const uploaded = await startUpload([file]);
+      const url = uploaded?.[0]?.url;
 
-    const data = await extractFromCv.mutateAsync({ cvUrl: url, model });
-    onExtracted(data);
-    setFile(null);
+      // startUpload resolves undefined when the upload was rejected — most often
+      // a missing or invalid UPLOADTHING_TOKEN on the server.
+      if (!url) {
+        setUploadError(
+          "The file uploaded but no URL came back. Check that UPLOADTHING_TOKEN is set on the server.",
+        );
+        return;
+      }
+
+      const data = await extractFromCv.mutateAsync({ cvUrl: url, model });
+      onExtracted(data);
+      setFile(null);
+    } catch (error) {
+      // extractFromCv renders its own error; anything else surfaces here rather
+      // than becoming an unhandled rejection the user never sees.
+      if (!extractFromCv.isError) {
+        setUploadError(error instanceof Error ? error.message : "Something went wrong.");
+      }
+    }
   }
 
   const isPending = isUploading || extractFromCv.isPending;
@@ -122,6 +156,8 @@ export default function CvUpload({ onExtracted, model }: CvUploadProps) {
           )}
         </Button>
       )}
+
+      {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
 
       {extractFromCv.isError && (
         <p className="text-xs text-destructive">

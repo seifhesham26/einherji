@@ -1,4 +1,4 @@
-import { and, eq, desc, lte } from "drizzle-orm";
+import { and, eq, desc, lte, sql } from "drizzle-orm";
 import type { Database } from "@/lib/db";
 import { leads } from "@/lib/db/schema";
 import type { LeadStatus, UpdateLeadInput } from "./leads.validators";
@@ -35,6 +35,48 @@ export async function insertLeads(db: Database, userId: string, leadsData: {
 }[]) {
   if (leadsData.length === 0) return [];
   return db.insert(leads).values(leadsData.map((lead) => ({ ...lead, userId }))).returning();
+}
+
+// Typed on the table's own shape rather than the form's — the db layer shouldn't
+// inherit whether a field happened to be optional in a UI schema.
+export interface NewLead {
+  firstName: string;
+  company: string;
+  lastName?: string | null;
+  title?: string | null;
+  linkedinUrl?: string | null;
+  headline?: string | null;
+  about?: string | null;
+  jobId?: string | null;
+}
+
+export async function insertLead(db: Database, userId: string, leadData: NewLead) {
+  const [inserted] = await db.insert(leads).values({ ...leadData, userId }).returning();
+  return inserted;
+}
+
+// Same person, same account. Used to stop a hand-entered lead duplicating one the
+// scraper already found — insertLeads has no dedupe of its own (AUDIT M5).
+export async function findDuplicateLead(
+  db: Database,
+  userId: string,
+  candidate: { linkedinUrl: string | null; firstName: string; company: string },
+) {
+  const matchesPerson = candidate.linkedinUrl
+    ? eq(leads.linkedinUrl, candidate.linkedinUrl)
+    : and(
+        // Names and companies vary in case between sources, so compare lowered.
+        sql`lower(${leads.firstName}) = lower(${candidate.firstName})`,
+        sql`lower(${leads.company}) = lower(${candidate.company})`,
+      );
+
+  const [existing] = await db
+    .select()
+    .from(leads)
+    .where(and(eq(leads.userId, userId), matchesPerson))
+    .limit(1);
+
+  return existing ?? null;
 }
 
 export async function updateLead(db: Database, userId: string, updateData: UpdateLeadInput) {

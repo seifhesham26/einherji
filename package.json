@@ -12,7 +12,7 @@
     "test:canary": "cross-env SCRAPER_CANARY=1 vitest run src/lib/scrapers",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "test:integration": "cross-env SCRAPER_INTEGRATION=1 vitest run src/server src/usage src/credentials src/scraping/scraping.integration.test.ts"
+    "test:integration": "cross-env SCRAPER_INTEGRATION=1 vitest run src/server src/usage src/credentials src/messages src/leads src/scraping/scraping.integration.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",

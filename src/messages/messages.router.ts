@@ -1,7 +1,18 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/trpc";
-import { getMessagesSchema, generateMessageSchema, approveMessageSchema } from "./messages.validators";
-import { fetchMessages, generateAndSaveMessage, approveAndUpdateLead } from "./messages.service";
-import { getApprovedTodayCount } from "./messages.db";
+import {
+  getMessagesSchema,
+  generateMessageSchema,
+  approveMessageSchema,
+  markMessageSentSchema,
+} from "./messages.validators";
+import {
+  fetchMessages,
+  fetchReadyToSend,
+  generateAndSaveMessage,
+  approveAndUpdateLead,
+  markMessageAsSent,
+} from "./messages.service";
+import { getApprovedTodayCount, getSentTodayCount } from "./messages.db";
 import { db } from "@/lib/db";
 
 export const messagesRouter = createTRPCRouter({
@@ -14,6 +25,20 @@ export const messagesRouter = createTRPCRouter({
   getApprovedTodayCount: protectedProcedure.query(async ({ ctx }) => {
     return getApprovedTodayCount(db, ctx.session.user.id);
   }),
+
+  getReadyToSend: protectedProcedure.query(async ({ ctx }) => {
+    return fetchReadyToSend(db, ctx.session.user.id);
+  }),
+
+  getSentTodayCount: protectedProcedure.query(async ({ ctx }) => {
+    return getSentTodayCount(db, ctx.session.user.id);
+  }),
+
+  markSent: protectedProcedure
+    .input(markMessageSentSchema)
+    .mutation(async ({ input, ctx }) => {
+      return markMessageAsSent(db, ctx.session.user.id, input);
+    }),
 
   generate: protectedProcedure
     .input(generateMessageSchema)

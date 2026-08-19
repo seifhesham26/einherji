@@ -86,10 +86,30 @@ use honestly. No code changes needed afterwards — just enable the source.
 
 Ordered by what I'd buy first for the money.
 
-### 1. Apify — pay-as-you-go, has free monthly credits
-- **Unlocks:** "Find Managers" — the only remaining Apify dependency. LinkedIn *profiles* are auth-walled with no logged-out equivalent, so this can't be self-hosted the way job scraping was.
-- **Code status:** ✅ done, and now validates its response properly (AUDIT C4). The token is per-account, saved under Settings → Integrations and encrypted at rest — Apify bills per run, so it is never shared.
-- **Worth it because:** it is the only thing standing between a list of jobs and a list of people to contact.
+### 1. Apify — ⛔ blocked, and money won't fix it
+- **Unlocks:** "Find Managers" — the only remaining Apify dependency.
+- **Status: broken, verified 2026-08-18.** Clicking Find Managers returns
+  `Field input.cookie is required, Field input.proxy is required`. The actor
+  `curious_coder/linkedin-profile-scraper` now requires a **logged-in LinkedIn
+  session cookie** — it drives LinkedIn as you.
+- **Why we're not fixing it that way.** Supplying a session cookie means
+  automating an authenticated LinkedIn session. That is the single line the whole
+  scraper deliberately stays behind: every job source here uses logged-out, public
+  endpoints for exactly this reason. It breaches LinkedIn's terms and puts your
+  personal account at risk of restriction — a real cost, since your LinkedIn
+  profile is part of how you get hired.
+- **Buying Apify credits will not help.** The blocker is the cookie, not the balance.
+- **The alternatives**, in order of sanity:
+  1. **Find managers by hand.** For a handful of target companies this is minutes
+     of work, and the rest of the pipeline (message generation, approval, send
+     tracking) already works from a lead you add yourself.
+  2. **A SERP API** (SerpAPI, #3 below) to find "Head of Engineering at X" from
+     public search results — no LinkedIn session involved. This was always the
+     Phase 4 recommendation in `docs/SCRAPER-PLAN.md`.
+  3. A different Apify actor that supplies its own authentication. This shifts the
+     terms problem to the actor operator rather than removing it; you'd still be
+     commissioning the scrape.
+- The app now fails with a plain explanation instead of a raw 500.
 
 ### 2. Upstash QStash — free tier, then cheap
 - **Unlocks:** removes the 60-second scrape budget. Right now selecting all 21 sources means the run gets cut off partway; you're capped at whatever fits in a minute.

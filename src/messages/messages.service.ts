@@ -6,8 +6,20 @@ import { getLeadById } from "@/leads/leads.db";
 import { getJobById } from "@/jobs/jobs.db";
 import { setLeadMessageSent } from "@/leads/leads.db";
 import { consumeQuota } from "@/usage/usage.service";
-import { getMessages, upsertDraftMessage, approveMessage } from "./messages.db";
-import type { GetMessagesInput, GenerateMessageInput, ApproveMessageInput, MessageTemplate } from "./messages.validators";
+import {
+  approveMessage,
+  getMessages,
+  getReadyToSendMessages,
+  markMessageSent,
+  upsertDraftMessage,
+} from "./messages.db";
+import type {
+  GetMessagesInput,
+  GenerateMessageInput,
+  ApproveMessageInput,
+  MarkMessageSentInput,
+  MessageTemplate,
+} from "./messages.validators";
 import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
 
 export async function fetchMessages(db: Database, userId: string, input: GetMessagesInput) {
@@ -66,9 +78,38 @@ export async function approveAndUpdateLead(
   const updated = await approveMessage(db, userId, input.messageId, input.editedBody);
   if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Message not found" });
 
-  // Scoped too: approving someone else's message used to flip *their* lead to
-  // message_sent and stamp lastContactedAt. The message is ours by the line
-  // above, so its lead is as well — but the query says so rather than assuming.
-  await setLeadMessageSent(db, userId, updated.leadId);
+  // The lead is deliberately *not* moved to message_sent here. Approving means
+  // "this draft is good", not "I have contacted this person" — marking them
+  // contacted at approval time made the tracker claim outreach that never
+  // happened. That transition belongs to markMessageAsSent.
   return updated;
+}
+
+export async function fetchReadyToSend(db: Database, userId: string) {
+  return getReadyToSendMessages(db, userId);
+}
+
+/**
+ * Records that the user actually sent an approved message.
+ *
+ * This is the point the lead becomes "contacted" — it's the first moment the
+ * claim is true. Sending itself is manual: the app has no email address for a
+ * lead (the profile scraper doesn't return one), so the user copies the text and
+ * sends it themselves.
+ */
+export async function markMessageAsSent(
+  db: Database,
+  userId: string,
+  input: MarkMessageSentInput,
+) {
+  const sent = await markMessageSent(db, userId, input.messageId);
+  if (!sent) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "No approved message found to mark as sent.",
+    });
+  }
+
+  await setLeadMessageSent(db, userId, sent.leadId);
+  return sent;
 }

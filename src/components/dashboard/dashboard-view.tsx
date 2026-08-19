@@ -30,7 +30,7 @@ export default function DashboardView() {
           <h1 className="text-xl font-semibold">
             {getGreeting()}{firstName ? `, ${firstName}` : ""}
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Here's your job hunt overview.</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Here&apos;s your job hunt overview.</p>
         </div>
         <Button
           size="sm"

@@ -1,6 +1,12 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/trpc";
-import { getLeadsSchema, updateLeadSchema } from "./leads.validators";
-import { fetchLeads, patchLead, fetchRecentActivity, fetchOverdueFollowUps } from "./leads.service";
+import { createLeadSchema, getLeadsSchema, updateLeadSchema } from "./leads.validators";
+import {
+  createLead,
+  fetchLeads,
+  patchLead,
+  fetchRecentActivity,
+  fetchOverdueFollowUps,
+} from "./leads.service";
 import { db } from "@/lib/db";
 
 export const leadsRouter = createTRPCRouter({
@@ -8,6 +14,12 @@ export const leadsRouter = createTRPCRouter({
     .input(getLeadsSchema)
     .query(async ({ input, ctx }) => {
       return fetchLeads(db, ctx.session.user.id, input);
+    }),
+
+  create: protectedProcedure
+    .input(createLeadSchema)
+    .mutation(async ({ input, ctx }) => {
+      return createLead(db, ctx.session.user.id, input);
     }),
 
   update: protectedProcedure

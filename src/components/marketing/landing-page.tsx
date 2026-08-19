@@ -203,7 +203,7 @@ function Hero() {
         >
           {/* Main card */}
           <div className="absolute left-1/2 -translate-x-1/2 top-0 w-72 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-5 shadow-2xl animate-float">
-            <p className="text-xs text-emerald-400 font-semibold mb-3 uppercase tracking-wide">Today's Scrape</p>
+            <p className="text-xs text-emerald-400 font-semibold mb-3 uppercase tracking-wide">Today&apos;s Scrape</p>
             <div className="flex items-end justify-between">
               <div>
                 <p className="text-4xl font-black text-white">24</p>
@@ -237,7 +237,7 @@ function Hero() {
               </div>
             </div>
             <p className="text-xs text-gray-300 leading-relaxed">
-              "Hi Sarah, I noticed your team is building out the infrastructure…"
+              &quot;Hi Sarah, I noticed your team is building out the infrastructure…&quot;
             </p>
             <div className="mt-3 flex gap-1.5">
               <span className="text-xs bg-emerald-500/20 text-emerald-400 rounded-full px-2.5 py-1 font-medium">

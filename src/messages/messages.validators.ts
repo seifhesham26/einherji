@@ -15,6 +15,10 @@ export const generateMessageSchema = z.object({
   template: messageTemplateSchema.default("hiring_manager"),
 });
 
+export const markMessageSentSchema = z.object({
+  messageId: z.string().min(1),
+});
+
 export const approveMessageSchema = z.object({
   messageId: z.string().min(1),
   editedBody: z.string().optional(),
@@ -25,3 +29,4 @@ export type MessageTemplate = z.infer<typeof messageTemplateSchema>;
 export type GetMessagesInput = z.infer<typeof getMessagesSchema>;
 export type GenerateMessageInput = z.infer<typeof generateMessageSchema>;
 export type ApproveMessageInput = z.infer<typeof approveMessageSchema>;
+export type MarkMessageSentInput = z.infer<typeof markMessageSentSchema>;

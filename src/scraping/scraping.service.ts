@@ -12,6 +12,7 @@ import {
   isAggregatorSource,
 } from "@/lib/scrapers/aggregators/fetch-aggregator-jobs";
 import { linkedInJobSource } from "@/lib/scrapers/linkedin/search-jobs";
+import { matchesQuery } from "@/lib/scrapers/aggregators/match-query";
 import { getSourceDefinition } from "@/lib/scrapers/source-registry";
 import { consumeQuota } from "@/usage/usage.service";
 import type {
@@ -159,7 +160,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
   try {
     for (const company of companiesInScope) {
       if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
-      await runBoardTask(db, userId, run.id, company, abortController.signal, taskErrors);
+      await runBoardTask(db, userId, run.id, company, query, abortController.signal, taskErrors);
     }
 
     for (const source of aggregatorSources) {
@@ -248,6 +249,7 @@ async function runBoardTask(
   userId: string,
   runId: string,
   company: { name: string; atsProvider: string | null; atsSlug: string | null },
+  query: JobSearchQuery,
   signal: AbortSignal,
   taskErrors: string[],
 ) {
@@ -260,10 +262,16 @@ async function runBoardTask(
     if (!isAtsProvider(company.atsProvider)) throw new Error("Unsupported ATS provider");
 
     const scraped = await fetchAtsJobs(company.atsProvider, company.atsSlug, company.name, signal);
-    const inserted = await insertJobs(db, userId, scraped);
+
+    // An ATS board returns the company's entire careers page — Stripe's Greenhouse
+    // alone is several hundred roles across every department. Aggregators have
+    // always filtered on the user's criteria; boards did not, so tracking one
+    // large company buried every other source in noise.
+    const relevant = scraped.filter((job) => matchesQuery(job, query));
+    const inserted = await insertJobs(db, userId, relevant);
 
     await recordTaskProgress(db, runId, {
-      jobsFound: scraped.length,
+      jobsFound: relevant.length,
       jobsInserted: inserted.length,
     });
   } catch (error) {

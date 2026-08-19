@@ -1,4 +1,4 @@
-import { and, eq, desc, gte } from "drizzle-orm";
+import { and, count, eq, desc, gte, inArray } from "drizzle-orm";
 import type { Database } from "@/lib/db";
 import { messages, leads, jobs } from "@/lib/db/schema";
 import type { MessageStatus, MessageTemplate } from "./messages.validators";
@@ -63,6 +63,64 @@ export async function approveMessage(
     .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
     .returning();
   return updated ?? null;
+}
+
+// Everything approved but not yet actually sent. Both statuses count: "edited"
+// is an approval too, it just means the user rewrote the draft first.
+const READY_TO_SEND_STATUSES = ["approved", "edited"] as const;
+
+export async function getReadyToSendMessages(db: Database, userId: string) {
+  return db
+    .select({ message: messages, lead: leads, job: jobs })
+    .from(messages)
+    .leftJoin(leads, eq(messages.leadId, leads.id))
+    .leftJoin(jobs, eq(messages.jobId, jobs.id))
+    .where(
+      and(
+        eq(messages.userId, userId),
+        inArray(messages.status, [...READY_TO_SEND_STATUSES]),
+      ),
+    )
+    .orderBy(desc(messages.approvedAt));
+}
+
+/**
+ * Records that the user actually sent this message.
+ *
+ * Only an approved or edited message can be marked sent — the status is part of
+ * the WHERE clause, so a draft can't skip review, and marking the same message
+ * twice is a no-op rather than moving sentAt forward.
+ */
+export async function markMessageSent(db: Database, userId: string, messageId: string) {
+  const [updated] = await db
+    .update(messages)
+    .set({ status: "sent", sentAt: new Date() })
+    .where(
+      and(
+        eq(messages.id, messageId),
+        eq(messages.userId, userId),
+        inArray(messages.status, [...READY_TO_SEND_STATUSES]),
+      ),
+    )
+    .returning();
+  return updated ?? null;
+}
+
+export async function getSentTodayCount(db: Database, userId: string) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const [row] = await db
+    .select({ total: count() })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.userId, userId),
+        eq(messages.status, "sent"),
+        gte(messages.sentAt, startOfToday),
+      ),
+    );
+  return row?.total ?? 0;
 }
 
 export async function getApprovedTodayCount(db: Database, userId: string) {

@@ -29,6 +29,7 @@ const mocks = {
   fetchAggregatorJobs: vi.fn(),
   insertJobs: vi.fn(),
   consumeQuota: vi.fn(),
+  fetchAtsJobs: vi.fn(),
 };
 
 vi.mock("./scraping.db", async (importOriginal) => ({
@@ -59,7 +60,14 @@ vi.mock("@/criteria/criteria.db", () => ({
   })),
 }));
 vi.mock("@/settings/settings.db", () => ({ getSettingsByUserId: vi.fn(async () => null) }));
-vi.mock("@/companies/companies.db", () => ({ getResolvedCompanies: vi.fn(async () => []) }));
+const resolvedCompanies = vi.fn(async () => [] as unknown[]);
+vi.mock("@/companies/companies.db", () => ({
+  getResolvedCompanies: () => resolvedCompanies(),
+}));
+vi.mock("@/lib/scrapers/ats/fetch-ats-jobs", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  fetchAtsJobs: (...args: unknown[]) => mocks.fetchAtsJobs(...args),
+}));
 vi.mock("@/credentials/credentials.service", () => ({ resolveCredentials: vi.fn(async () => null) }));
 vi.mock("@/jobs/jobs.db", () => ({
   getExistingSourceJobIds: vi.fn(async () => new Set<string>()),
@@ -90,6 +98,51 @@ describe("startScrape", () => {
     mocks.fetchAggregatorJobs.mockResolvedValue([]);
     mocks.insertJobs.mockResolvedValue([]);
     mocks.consumeQuota.mockResolvedValue(undefined);
+    mocks.fetchAtsJobs.mockResolvedValue([]);
+    resolvedCompanies.mockResolvedValue([]);
+  });
+
+  // Regression: ATS boards returned a company's entire careers page and inserted
+  // all of it. Tracking one large employer buried every other source in roles the
+  // user never asked for, while aggregators had always filtered on criteria.
+  it("filters company board results by the active criteria", async () => {
+    const { startScrape } = await import("./scraping.service");
+
+    resolvedCompanies.mockResolvedValue([
+      { name: "Stripe", atsProvider: "greenhouse", atsSlug: "stripe" },
+    ]);
+
+    const buildJob = (title: string) => ({
+      sourceJobId: title,
+      source: "greenhouse" as const,
+      title,
+      company: "Stripe",
+      jobUrl: "https://example.com/job",
+      companyUrl: null,
+      location: "Remote",
+      salary: null,
+      description: null,
+      postedAt: null,
+      workType: "unknown" as const,
+      isRemote: true,
+      tags: null,
+      attributionText: null,
+      attributionUrl: null,
+    });
+
+    // The active criteria in these tests ask for "React Developer".
+    mocks.fetchAtsJobs.mockResolvedValue([
+      buildJob("Senior React Developer"),
+      buildJob("Warehouse Operative"),
+      buildJob("Tax Accountant"),
+    ]);
+
+    await startScrape(db, "user_1", { sources: ["greenhouse"] });
+
+    const [, , insertedJobs] = mocks.insertJobs.mock.calls[0];
+    expect((insertedJobs as { title: string }[]).map((job) => job.title)).toEqual([
+      "Senior React Developer",
+    ]);
   });
 
   it("charges the scrape quota before doing any work", async () => {

@@ -1,5 +1,5 @@
-import ApprovalQueue from "@/components/messages/approval-queue";
+import MessagesView from "@/components/messages/messages-view";
 
 export default function MessagesPage() {
-  return <ApprovalQueue />;
+  return <MessagesView />;
 }

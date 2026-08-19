@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HTTP_URL_MESSAGE, isHttpUrl } from "@/utils/is-http-url";
 
 export const AVAILABLE_MODELS = [
   // ── Free (via OpenRouter) ───────────────────────────────────────────────────
@@ -17,13 +18,7 @@ export const DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 export const extractFromCvSchema = z.object({
   // Scheme narrowed here, address checked at fetch time by assert-safe-url.ts —
   // z.url() alone accepts file:// and javascript:.
-  cvUrl: z
-    .string()
-    .url()
-    .refine(
-      (value) => /^https?:$/.test(new URL(value).protocol),
-      "CV URL must start with http:// or https://",
-    ),
+  cvUrl: z.string().url().refine(isHttpUrl, HTTP_URL_MESSAGE),
   model: z.string().optional(),
 });
 

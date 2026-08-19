@@ -55,7 +55,7 @@ export default function ApprovalQueue() {
             <CheckCircle2 className="h-10 w-10 text-emerald-500" />
           </div>
           <div>
-            <p className="text-lg font-semibold">Queue's clear!</p>
+            <p className="text-lg font-semibold">Queue&apos;s clear!</p>
             <p className="text-sm text-muted-foreground mt-1">
               {approvedToday > 0
                 ? `You approved ${approvedToday} message${approvedToday !== 1 ? "s" : ""} today.`

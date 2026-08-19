@@ -74,7 +74,7 @@ export default function RegisterForm() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="name">Full Name</Label>
             <Input id="name" type="text" placeholder="Your name" autoComplete="name" {...register("name")} />
@@ -100,7 +100,7 @@ export default function RegisterForm() {
           {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="password">Password</Label>
             <Input
