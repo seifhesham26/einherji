@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { config } from "dotenv";
 
 config({ path: ".env.local" });
@@ -9,9 +9,50 @@ config({ path: ".env.local" });
 //   SCRAPER_INTEGRATION=1 SCRAPER_TEST_USER_ID=<id> npx vitest run src/scraping/scraping.integration.test.ts
 //
 // Point it at a development database — it inserts a tracked company and real jobs.
-const testUserId = process.env.SCRAPER_TEST_USER_ID;
-const isEnabled = process.env.SCRAPER_INTEGRATION === "1" && Boolean(testUserId);
+//
+// Runs against its own throwaway account, not the one in SCRAPER_TEST_USER_ID.
+// Each of these tests spends a scrape from the 50/day quota, so using the real
+// account meant running the suite a few times in a day exhausted it — and then
+// the tests failed while the code was perfectly correct.
+const isEnabled = process.env.SCRAPER_INTEGRATION === "1" &&
+  Boolean(process.env.SCRAPER_TEST_USER_ID);
 const describeIntegration = isEnabled ? describe : describe.skip;
+
+const testUserId = `scrape-test-${Date.now()}`;
+
+beforeAll(async () => {
+  if (!isEnabled) return;
+  const { db } = await import("@/lib/db");
+  const { users } = await import("@/lib/db/schema");
+  const { insertCriteria } = await import("@/criteria/criteria.db");
+
+  await db.insert(users).values({
+    id: testUserId,
+    name: "Scrape Test",
+    email: `${testUserId}@invalid.test`,
+    emailVerified: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  // Aggregators are keyword-driven, so a run needs criteria to search with.
+  await insertCriteria(db, {
+    userId: testUserId,
+    titles: ["engineer", "developer"],
+    locations: ["Remote"],
+    model: "meta-llama/llama-3.3-70b-instruct:free",
+  });
+});
+
+afterAll(async () => {
+  if (!isEnabled) return;
+  const { db } = await import("@/lib/db");
+  const { users } = await import("@/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+
+  // Cascades the jobs, companies, runs and usage rows away with it.
+  await db.delete(users).where(eq(users.id, testUserId));
+});
 
 describeIntegration("scrape pipeline (live, writes to db)", () => {
   it("adds a company, resolves its board, scrapes it, and stores jobs", async () => {
@@ -22,7 +63,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
     const { startScrape } = await import("./scraping.service");
     const { getAllJobs } = await import("@/jobs/jobs.db");
 
-    const userId = testUserId!;
+    const userId = testUserId;
 
     // Stripe runs a large Greenhouse board, so this exercises the full path.
     const company = await addTrackedCompany(db, userId, { name: "Stripe" });
@@ -66,7 +107,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
     const { startScrape } = await import("./scraping.service");
     const { deleteJobsBySource, getAllJobs } = await import("@/jobs/jobs.db");
 
-    const userId = testUserId!;
+    const userId = testUserId;
 
     // Start clean: dedupe means existing rows are never rewritten, so leftovers
     // from an earlier run would be asserted against instead of fresh output.
@@ -108,13 +149,13 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
       "./scraping.db"
     );
 
-    const first = await insertScrapeRun(db, testUserId!, {
+    const first = await insertScrapeRun(db, testUserId, {
       sources: ["remoteok"],
       tasksTotal: 1,
     });
 
     try {
-      const second = await insertScrapeRun(db, testUserId!, {
+      const second = await insertScrapeRun(db, testUserId, {
         sources: ["remoteok"],
         tasksTotal: 1,
       }).then(
@@ -131,7 +172,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
     }
 
     // And once the first run is no longer 'running', the next one is allowed.
-    const third = await insertScrapeRun(db, testUserId!, {
+    const third = await insertScrapeRun(db, testUserId, {
       sources: ["remoteok"],
       tasksTotal: 1,
     });
@@ -146,12 +187,12 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
       "./scraping.db"
     );
 
-    const run = await insertScrapeRun(db, testUserId!, {
+    const run = await insertScrapeRun(db, testUserId, {
       sources: ["remoteok"],
       tasksTotal: 1,
     });
 
-    const cancelled = await cancelScrapeRun(db, testUserId!, run.id);
+    const cancelled = await cancelScrapeRun(db, testUserId, run.id);
     expect(cancelled?.status).toBe("cancelled");
 
     const finished = await finishScrapeRunIfRunning(db, run.id, { status: "completed" });
@@ -164,7 +205,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
 
     // adzuna needs an API key. With none saved the task should complete as a
     // no-op rather than erroring — an unconfigured source is a state, not a fault.
-    const run = await startScrape(db, testUserId!, { sources: ["adzuna", "remoteok"] });
+    const run = await startScrape(db, testUserId, { sources: ["adzuna", "remoteok"] });
 
     expect(run!.status).toBe("completed");
     expect(run!.tasksCompleted).toBe(2);

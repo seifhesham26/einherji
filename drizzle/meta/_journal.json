@@ -64,6 +64,20 @@
       "when": 1787148033479,
       "tag": "0008_dry_lake",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787156426321,
+      "tag": "0009_huge_white_tiger",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787160888104,
+      "tag": "0010_hard_tomorrow_man",
+      "breakpoints": true
     }
   ]
 }

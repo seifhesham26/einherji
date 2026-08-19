@@ -55,6 +55,18 @@ describe("source registry consistency", () => {
     }
   });
 
+  // A "places" source finds businesses, not listings, so it deliberately has no
+  // job fetcher. Keeping it out of the aggregator tier is what stops the check
+  // above from being weakened with another exception.
+  it("keeps business search out of the job-source tiers", () => {
+    const places = SOURCE_DEFINITIONS.filter((source) => source.tier === "places");
+
+    expect(places.length).toBeGreaterThan(0);
+    for (const source of places) {
+      expect(AGGREGATOR_SOURCE_NAMES).not.toContain(source.id);
+    }
+  });
+
   it("gives every credentialed source a signup link and a cost note", () => {
     for (const source of SOURCE_DEFINITIONS) {
       if (source.credentialFields.length === 0) continue;

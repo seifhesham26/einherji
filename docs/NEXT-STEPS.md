@@ -54,6 +54,19 @@ the field rather than surfacing as a confusing runtime error later.
 | `CREDENTIALS_ENCRYPTION_KEY` | Encrypts stored API keys at rest (AES-256-GCM) |
 | `CRON_SECRET` | Authenticates the daily run. Without it that endpoint returns 503. |
 
+Fully optional, each degrading cleanly when absent:
+
+| Variable | What it turns on | Without it |
+|---|---|---|
+| `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` | Error tracking | SDK no-ops |
+| `SENTRY_ORG` + `SENTRY_PROJECT` + `SENTRY_AUTH_TOKEN` | Readable stack traces | Errors report minified |
+| `QSTASH_TOKEN` + `QSTASH_CURRENT_SIGNING_KEY` + `QSTASH_NEXT_SIGNING_KEY` | One invocation per account, with retries | Daily run happens inline |
+
+Full setup steps for each are in
+[SETUP-CHECKLIST.md](./SETUP-CHECKLIST.md#4-built--needs-an-account-to-switch-on).
+The **Google Places** key is not an environment variable — it's per-account, under
+Settings → Source credentials.
+
 Generate both secrets:
 
 ```bash
@@ -78,7 +91,7 @@ Apify are all per-account, entered in the app and encrypted at rest. See section
 npm run db:migrate
 ```
 
-That applies all six migrations. Re-run it whenever you pull changes touching
+That applies all ten migrations. Re-run it whenever you pull changes touching
 `src/lib/db/schema.ts`.
 
 > Use `npm run db:migrate`, **not** `db:push`. The migration history is the record
@@ -122,8 +135,9 @@ That's a working install. Everything below is optional.
 ## 5b. Turn on the daily run
 
 Settings → **Daily run** → Turn on. From then on the app scrapes your sources at
-06:00 UTC and emails you the top 5 matches. Nothing is sent on a day with no new
-jobs — a daily "nothing today" is how a digest ends up in spam.
+06:00 UTC and sends you the top 5 matches, by email or Telegram or both. Nothing
+is sent on a day with no new jobs — a daily "nothing today" is how a digest ends
+up in spam.
 
 It spends one of your 50 daily scrapes and uses your own criteria and sources.
 
@@ -148,7 +162,10 @@ browser. Locally there's no cron, so the schedule only runs on Vercel.
    **Vercel → Project → Settings → Environment Variables**.
 2. Use the **same** `CREDENTIALS_ENCRYPTION_KEY` as local, or keys already saved
    through your local install won't decrypt in production.
-3. Point `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` at the deployed URL, not localhost.
+3. Point `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` at the deployed URL, not
+   localhost. **`NEXT_PUBLIC_APP_URL` matters twice over** — it's also where
+   QStash sends its callbacks, so a stale localhost value silently breaks the
+   daily run once the queue is enabled.
 4. **Add `CRON_SECRET`** — the daily run won't work without it, and the endpoint
    refuses to run rather than accepting anonymous requests:
 

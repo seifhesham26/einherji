@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import type { Database } from "@/lib/db";
 import { env } from "@/lib/env";
 import { FROM_EMAIL, isEmailConfigured, resend } from "@/lib/resend";
@@ -5,6 +6,7 @@ import { getActiveCriteria } from "@/criteria/criteria.db";
 import { rankJobs } from "@/jobs/score-job";
 import { startScrape } from "@/scraping/scraping.service";
 import { getDigestSubscribers, getJobsSince, markDigestSent } from "./digest.db";
+import { isQueueConfigured, qstash, queueCallbackUrl } from "@/lib/qstash";
 import { sendTelegramMessage } from "@/lib/telegram";
 import {
   buildSubject,
@@ -37,6 +39,13 @@ export interface DigestRunResult {
  */
 export async function runDailyDigestForAll(db: Database): Promise<DigestRunResult[]> {
   const subscribers = await getDigestSubscribers(db);
+
+  // With a queue the cron only hands out work: one message per account, each
+  // landing in its own invocation with its own full budget. Without one it runs
+  // everything here, which is fine for a single account and stops scaling
+  // somewhere around a handful.
+  if (isQueueConfigured()) return fanOutToQueue(subscribers);
+
   const results: DigestRunResult[] = [];
   const deadline = Date.now() + MAX_CRON_DURATION_MS;
 
@@ -48,6 +57,51 @@ export async function runDailyDigestForAll(db: Database): Promise<DigestRunResul
   }
 
   return results;
+}
+
+async function fanOutToQueue(subscribers: DigestSubscriber[]): Promise<DigestRunResult[]> {
+  const url = queueCallbackUrl("/api/queue/run-digest");
+
+  const published = await Promise.all(
+    subscribers.map(async (subscriber) => {
+      try {
+        await qstash!.publishJSON({
+          url,
+          body: { userId: subscriber.userId },
+          // QStash retries a failed delivery on its own, which the inline path
+          // cannot — a transient blip no longer costs someone their digest.
+          retries: 2,
+        });
+        return { userId: subscriber.userId, jobsFound: 0, emailed: false } satisfies DigestRunResult;
+      } catch (error) {
+        return {
+          userId: subscriber.userId,
+          jobsFound: 0,
+          emailed: false,
+          error: error instanceof Error ? error.message : "Could not queue this account",
+        } satisfies DigestRunResult;
+      }
+    }),
+  );
+
+  return published;
+}
+
+/**
+ * Runs one account by id — the queue callback's entry point.
+ *
+ * Returns null when the account no longer wants a digest, which happens whenever
+ * someone turns it off between the cron firing and the message being delivered.
+ */
+export async function runDigestForUserId(
+  db: Database,
+  userId: string,
+): Promise<DigestRunResult | null> {
+  const subscribers = await getDigestSubscribers(db);
+  const subscriber = subscribers.find((candidate) => candidate.userId === userId);
+
+  if (!subscriber) return null;
+  return runDailyDigestForUser(db, subscriber);
 }
 
 export interface DigestSubscriber {
@@ -156,6 +210,9 @@ async function deliver(
         });
         anyDelivered = true;
       } catch (error) {
+        // Swallowed so the other channel still gets a chance — but a digest that
+        // silently stops arriving is exactly what you'd never notice.
+        Sentry.captureException(error, { tags: { job: "daily-digest", channel: "email" } });
         console.error("[digest] email failed:", error);
       }
     } else {
@@ -172,6 +229,7 @@ async function deliver(
       );
       anyDelivered = true;
     } catch (error) {
+      Sentry.captureException(error, { tags: { job: "daily-digest", channel: "telegram" } });
       console.error("[digest] telegram failed:", error);
     }
   }

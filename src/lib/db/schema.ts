@@ -97,6 +97,7 @@ export const jobSourceEnum = pgEnum("job_source", [
   "reddit",
   "twitter",
   "serpapi",
+  "google_places",
   // Scraped
   "linkedin_guest",
   "apify",
@@ -208,6 +209,10 @@ export const jobs = pgTable("jobs", {
 export const leads = pgTable("leads", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Which hunt this contact belongs to. Without it a hundred imported paper
+  // customers would sit in the same list as a job search's hiring managers.
+  // Nullable so contacts added before buckets existed still work.
+  bucketId: text("bucket_id").references(() => buckets.id, { onDelete: "cascade" }),
   // Set null, not cascade: a hiring manager is still a real contact after the
   // posting they came from is gone. It also unblocks deleteJobsBySource, which
   // currently throws a foreign key violation whenever a lead references a job
@@ -220,6 +225,12 @@ export const leads = pgTable("leads", {
   company: text("company").notNull(),
   linkedinUrl: text("linkedin_url"),
   email: text("email"),
+  // Egyptian B2B outreach runs on phone and WhatsApp, not email — and for a
+  // business prospect this is usually the only contact route there is.
+  phone: text("phone"),
+  // Google's stable identifier for a place. The one Places field their terms
+  // allow storing indefinitely; everything else displayable has to be re-fetched.
+  placeId: text("place_id"),
   headline: text("headline"),
   about: text("about"),
   recentPosts: text("recent_posts"),
@@ -240,6 +251,7 @@ export const leads = pgTable("leads", {
   // Not for reads — this is the referencing side of leads.job_id. Without it,
   // deleting jobs (deleteJobsBySource does, per source) scans this whole table.
   index("leads_job_idx").on(table.jobId),
+  index("leads_bucket_idx").on(table.bucketId),
 ]);
 
 // ─── User Settings ────────────────────────────────────────────────────────────

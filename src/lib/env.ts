@@ -23,6 +23,18 @@ const serverEnvSchema = z.object({
   // without it; the cron route itself refuses to run when it's missing, which
   // fails closed at the only place it matters.
   CRON_SECRET: z.string().optional(),
+  // Error tracking. Optional everywhere: without a DSN the Sentry SDK
+  // initialises into a no-op rather than failing, so the app runs for anyone who
+  // hasn't signed up.
+  SENTRY_DSN: z.string().optional(),
+  SENTRY_ORG: z.string().optional(),
+  SENTRY_PROJECT: z.string().optional(),
+  SENTRY_AUTH_TOKEN: z.string().optional(),
+  // Optional work queue. Without it the daily run happens inline, which is fine
+  // for one account and doesn't scale past a few.
+  QSTASH_TOKEN: z.string().optional(),
+  QSTASH_CURRENT_SIGNING_KEY: z.string().optional(),
+  QSTASH_NEXT_SIGNING_KEY: z.string().optional(),
 
 });
 

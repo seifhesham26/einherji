@@ -25,6 +25,7 @@ export const jobSourceNameSchema = z.enum([
   "reddit",
   "twitter",
   "serpapi",
+  "google_places",
   "linkedin_guest",
   "apify",
 ]);

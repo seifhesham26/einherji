@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetLeads } from "@/hooks/leads/useGetLeads";
 import AddLeadDialog from "./add-lead-dialog";
+import FindBusinessesDialog from "./find-businesses-dialog";
+import ImportLeadsDialog from "./import-leads-dialog";
 import { useGenerateMessage } from "@/hooks/messages/useGenerateMessage";
 import { formatRelativeDate } from "@/utils/format-relative-date";
 import type { LeadStatus } from "@/leads/leads.validators";
@@ -78,7 +80,11 @@ export default function LeadsTable() {
             People to reach out to about your target jobs.
           </p>
         </div>
-        <AddLeadDialog />
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <ImportLeadsDialog />
+          <FindBusinessesDialog />
+          <AddLeadDialog />
+        </div>
       </div>
 
       {/* Filters */}

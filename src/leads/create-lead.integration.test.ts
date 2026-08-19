@@ -107,3 +107,61 @@ describeIntegration("adding a lead by hand (live, writes to db)", () => {
     ).resolves.toBeDefined();
   }, 60_000);
 });
+
+describeIntegration("importing a pasted list (live, writes to db)", () => {
+  it("creates every business and reports duplicates separately", async () => {
+    const { db } = await import("@/lib/db");
+    const { createLeads } = await import("./leads.service");
+
+    const stamp = Date.now();
+    const paste = [
+      { name: `مكتبة بكير ${stamp}`, phone: "0225211040" },
+      { name: `Delta Repro ${stamp}`, phone: "0235699066" },
+      { name: `Nile Drawing ${stamp}` },
+    ];
+
+    const first = await createLeads(db, userId, { leads: paste });
+    expect(first.created).toBe(3);
+    expect(first.duplicates).toHaveLength(0);
+    expect(first.failed).toHaveLength(0);
+
+    // Re-importing the same list is the normal case, not an error — it should
+    // report what was already there rather than failing the batch.
+    const second = await createLeads(db, userId, { leads: paste });
+    expect(second.created).toBe(0);
+    expect(second.duplicates).toHaveLength(3);
+  }, 120_000);
+
+  it("stores the phone number and keeps Arabic names intact", async () => {
+    const { db } = await import("@/lib/db");
+    const { createLeads } = await import("./leads.service");
+    const { getAllLeads } = await import("./leads.db");
+
+    const name = `مكتب الهندسة ${Date.now()}`;
+    await createLeads(db, userId, { leads: [{ name, phone: "+20 2 2620 3507" }] });
+
+    const leads = await getAllLeads(db, userId);
+    const saved = leads.find((lead) => lead.company === name);
+
+    expect(saved).toBeDefined();
+    expect(saved?.phone).toBe("+20 2 2620 3507");
+  }, 60_000);
+
+  // One bad row must not cost the rest of a sixty-line paste.
+  it("keeps going when one entry cannot be saved", async () => {
+    const { db } = await import("@/lib/db");
+    const { createLeads } = await import("./leads.service");
+
+    const stamp = Date.now();
+    const result = await createLeads(db, userId, {
+      leads: [
+        { name: `Good One ${stamp}` },
+        { name: `Good One ${stamp}` }, // same business twice in one paste
+        { name: `Good Two ${stamp}` },
+      ],
+    });
+
+    expect(result.created).toBe(2);
+    expect(result.duplicates).toHaveLength(1);
+  }, 60_000);
+});

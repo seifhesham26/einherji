@@ -47,7 +47,10 @@ export interface NewLead {
   linkedinUrl?: string | null;
   headline?: string | null;
   about?: string | null;
+  phone?: string | null;
+  placeId?: string | null;
   jobId?: string | null;
+  bucketId?: string | null;
 }
 
 export async function insertLead(db: Database, userId: string, leadData: NewLead) {

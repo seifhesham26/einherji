@@ -12,30 +12,36 @@ const isEnabled =
 const describeIntegration = isEnabled ? describe : describe.skip;
 
 const quotaUserId = `quota-test-${Date.now()}`;
+// A second throwaway account. These tests used to consume the *real* account's
+// parse_cv allowance, so running them a few times in a day exhausted the very
+// quota they were asserting against — the tests failed while the code was right.
+const otherQuotaUserId = `quota-other-${Date.now()}`;
 
 beforeAll(async () => {
   if (!isEnabled) return;
   const { db } = await import("@/lib/db");
   const { users } = await import("@/lib/db/schema");
 
-  await db.insert(users).values({
-    id: quotaUserId,
-    name: "Quota Test",
-    email: `${quotaUserId}@invalid.test`,
-    emailVerified: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  await db.insert(users).values(
+    [quotaUserId, otherQuotaUserId].map((id) => ({
+      id,
+      name: "Quota Test",
+      email: `${id}@invalid.test`,
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })),
+  );
 });
 
 afterAll(async () => {
   if (!isEnabled) return;
   const { db } = await import("@/lib/db");
   const { users } = await import("@/lib/db/schema");
-  const { eq } = await import("drizzle-orm");
+  const { inArray } = await import("drizzle-orm");
 
-  // Cascades the usage rows away with it.
-  await db.delete(users).where(eq(users.id, quotaUserId));
+  // Cascades the usage rows away with them.
+  await db.delete(users).where(inArray(users.id, [quotaUserId, otherQuotaUserId]));
 });
 
 describeIntegration("usage quotas (live, writes to db)", () => {
@@ -69,7 +75,7 @@ describeIntegration("usage quotas (live, writes to db)", () => {
     const { consumeQuota } = await import("./usage.service");
 
     await expect(
-      consumeQuota(db, process.env.SCRAPER_TEST_USER_ID!, "parse_cv"),
+      consumeQuota(db, otherQuotaUserId, "parse_cv"),
     ).resolves.toBeUndefined();
   }, 60_000);
 
@@ -97,15 +103,15 @@ describeIntegration("usage quotas (live, writes to db)", () => {
     const { QUOTA_WINDOW_MS } = await import("./usage.validators");
 
     const windowStart = () => new Date(Date.now() - QUOTA_WINDOW_MS);
-    const before = await getUsageInWindow(db, process.env.SCRAPER_TEST_USER_ID!, "parse_cv", windowStart());
+    const before = await getUsageInWindow(db, otherQuotaUserId, "parse_cv", windowStart());
 
     // A private address — the SSRF guard rejects it, so this fails after the
     // quota is charged and without any network call leaving the box.
     await expect(
-      extractCv(db, process.env.SCRAPER_TEST_USER_ID!, { cvUrl: "http://127.0.0.1/cv.pdf" }),
+      extractCv(db, otherQuotaUserId, { cvUrl: "http://127.0.0.1/cv.pdf" }),
     ).rejects.toThrow();
 
-    const after = await getUsageInWindow(db, process.env.SCRAPER_TEST_USER_ID!, "parse_cv", windowStart());
+    const after = await getUsageInWindow(db, otherQuotaUserId, "parse_cv", windowStart());
     expect(after.used).toBe(before.used + 1);
   }, 60_000);
 });

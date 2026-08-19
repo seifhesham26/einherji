@@ -38,7 +38,30 @@ export const createLeadSchema = z.object({
     .refine((value) => !value || isHttpUrl(value), HTTP_URL_MESSAGE),
   headline: optionalText,
   about: z.string().trim().max(5000).optional(),
+  // Often the only contact route for a business — Egyptian B2B runs on phone
+  // and WhatsApp rather than email.
+  phone: z.string().trim().max(50).optional(),
+  // Google's stable place identifier, when the lead came from a business search.
+  placeId: z.string().trim().max(200).optional(),
   jobId: z.string().min(1).optional(),
+  // Which hunt this contact belongs to.
+  bucketId: z.string().min(1).optional(),
+});
+
+// A whole pasted list at once. Capped because this arrives from a textarea and
+// each row is a database round trip.
+export const createLeadsSchema = z.object({
+  bucketId: z.string().min(1).optional(),
+  leads: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(200),
+        phone: z.string().trim().max(50).optional(),
+        notes: z.string().trim().max(1000).optional(),
+      }),
+    )
+    .min(1, "Nothing to import")
+    .max(200, "Import at most 200 at a time"),
 });
 
 export const updateLeadSchema = z.object({
@@ -51,4 +74,5 @@ export const updateLeadSchema = z.object({
 export type LeadStatus = z.infer<typeof leadStatusSchema>;
 export type GetLeadsInput = z.infer<typeof getLeadsSchema>;
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+export type CreateLeadsInput = z.infer<typeof createLeadsSchema>;
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;

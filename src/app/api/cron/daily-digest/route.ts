@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { runDailyDigestForAll } from "@/digest/digest.service";
@@ -33,6 +34,18 @@ export async function GET(request: NextRequest) {
 
   try {
     const results = await runDailyDigestForAll(db);
+    const failures = results.filter((result) => result.error);
+
+    // Per-account failures don't fail the run, which means nobody would ever see
+    // them — the response goes to Vercel's cron log and no further. This is the
+    // silent-breakage case Sentry exists for.
+    for (const failure of failures) {
+      Sentry.captureMessage(`Daily digest failed for one account: ${failure.error}`, {
+        level: "warning",
+        tags: { job: "daily-digest" },
+        extra: { userId: failure.userId },
+      });
+    }
 
     return NextResponse.json({
       ranAt: new Date().toISOString(),
@@ -41,13 +54,11 @@ export async function GET(request: NextRequest) {
       jobsFound: results.reduce((total, result) => total + result.jobsFound, 0),
       // Per-account errors don't fail the run — one broken account shouldn't stop
       // everyone else's digest — but they're reported so a silent breakage is visible.
-      errors: results.filter((result) => result.error).map((result) => ({
-        userId: result.userId,
-        error: result.error,
-      })),
+      errors: failures.map((result) => ({ userId: result.userId, error: result.error })),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Digest run failed";
+    Sentry.captureException(error, { tags: { job: "daily-digest" } });
     console.error("[cron] daily digest failed:", error);
     return NextResponse.json({ error: message }, { status: 500 });
   }

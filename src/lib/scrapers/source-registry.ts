@@ -9,7 +9,11 @@ export type SourceTier =
   // Freelance / project marketplaces
   | "marketplace"
   // Scraped HTML rather than an API
-  | "scraped";
+  | "scraped"
+  // Not a source of listings at all — businesses to approach. Searched live and
+  // shown to the user; nothing is stored until they save a contact, because
+  // Google's terms don't allow caching the display fields.
+  | "places";
 
 export interface CredentialField {
   key: string;
@@ -206,6 +210,20 @@ export const SOURCE_DEFINITIONS: SourceDefinition[] = [
   },
 
   // ─── Scraped ────────────────────────────────────────────────────────────────
+  {
+    id: "google_places",
+    name: "Google Places",
+    tier: "places",
+    // Not a job source. Businesses to sell to — the supply side of a "clients"
+    // or "suppliers" bucket rather than a feed of listings.
+    description:
+      "Find businesses by what they do and where they are. Searched live and shown to you; nothing is stored until you save a contact.",
+    signupUrl: "https://console.cloud.google.com/apis/library/places-backend.googleapis.com",
+    credentialFields: [
+      { key: "apiKey", label: "API Key", placeholder: "AIza…", isSecret: true },
+    ],
+    costNote: "Pay as you go — needs a card on Google Cloud",
+  },
   {
     id: "linkedin_guest",
     name: "LinkedIn",
