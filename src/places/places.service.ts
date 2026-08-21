@@ -63,5 +63,6 @@ export async function savePlaceAsLead(
     headline: input.category,
     about: input.address,
     placeId: input.placeId,
+    bucketId: input.bucketId,
   });
 }

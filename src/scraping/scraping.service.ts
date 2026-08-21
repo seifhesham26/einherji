@@ -22,6 +22,7 @@ import type {
   ScrapedJob,
   WorkType,
 } from "@/lib/scrapers/job-source.types";
+import { isUniqueViolation } from "@/utils/is-unique-violation";
 import {
   cancelScrapeRun,
   failStaleRun,
@@ -30,7 +31,6 @@ import {
   getScrapeRunById,
   getScrapeRunStatus,
   insertScrapeRun,
-  isUniqueViolation,
   recordTaskProgress,
 } from "./scraping.db";
 import type { StartScrapeInput } from "./scraping.validators";
@@ -83,10 +83,6 @@ export async function cancelRun(db: Database, userId: string, runId: string) {
  */
 export async function startScrape(db: Database, userId: string, input: StartScrapeInput) {
   await assertNoRunInFlight(db, userId);
-  // Cheap in money, but the cost that matters is our IP being blocked by the
-  // boards. The one-run-at-a-time guard above stops parallel runs; this stops a
-  // sequential loop.
-  await consumeQuota(db, userId, "scrape");
 
   const [activeCriteria, settings, companies] = await Promise.all([
     getActiveCriteria(db, userId),
@@ -99,8 +95,19 @@ export async function startScrape(db: Database, userId: string, input: StartScra
   // Cairo" are different hunts and must not share a keyword list.
   const bucket = input.bucketId ? await requireBucket(db, userId, input.bucketId) : null;
 
+  // An empty source list on a bucket is a decision, not an omission: the paper
+  // factory and supplier buckets are fed by hand because no automated source is
+  // available or permitted. Falling back to the account defaults here would file
+  // software job listings under them, which is worse than doing nothing.
+  if (bucket && bucket.sources.length === 0 && !input.sources?.length) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `"${bucket.name}" has no automated sources — it's a hand-built list. Add contacts with Leads → Find businesses or Import list, or edit the bucket and pick sources for it.`,
+    });
+  }
+
   const sources = resolveSources(
-    input.sources ?? (bucket?.sources.length ? (bucket.sources as JobSourceName[]) : undefined),
+    input.sources ?? (bucket ? (bucket.sources as JobSourceName[]) : undefined),
     settings?.jobSources,
   );
   const boardSources = sources.filter(isAtsProvider);
@@ -138,6 +145,13 @@ export async function startScrape(db: Database, userId: string, input: StartScra
         "Nothing to scrape. Add target companies, or enable an aggregator source in Settings.",
     });
   }
+
+  // Charged here rather than at the top: everything above this point is
+  // validation that makes no external call, so rejecting a misconfigured bucket
+  // shouldn't cost the account one of its fifty daily scrapes. It is still
+  // charged *before* the work — a run that fails halfway has still hit the
+  // boards, and a retry loop must not be free.
+  await consumeQuota(db, userId, "scrape");
 
   const query: JobSearchQuery = {
     titles: keywords,
@@ -191,7 +205,11 @@ export async function startScrape(db: Database, userId: string, input: StartScra
       );
     }
 
-    if (wantsLinkedIn && activeCriteria) {
+    // Gated on activeCriteria until now, while tasksTotal counted it regardless —
+    // so a bucket-driven run on an account with no saved criteria skipped the
+    // task without recording it, and the progress bar sat at 5/6 forever. The
+    // task only ever needed `query`, which the bucket already supplies.
+    if (wantsLinkedIn) {
       if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
       const existingSourceJobIds = await getExistingSourceJobIds(db, userId, "linkedin_guest");
       await runLinkedInTask(db, userId, run.id, query, existingSourceJobIds, bucket?.id ?? null, abortController.signal);

@@ -212,7 +212,13 @@ export const leads = pgTable("leads", {
   // Which hunt this contact belongs to. Without it a hundred imported paper
   // customers would sit in the same list as a job search's hiring managers.
   // Nullable so contacts added before buckets existed still work.
-  bucketId: text("bucket_id").references(() => buckets.id, { onDelete: "cascade" }),
+  //
+  // Set null, not cascade — the same reasoning as jobId above. A contact is a
+  // person (or a business) you know, not a search result: deleting the hunt that
+  // turned them up must not delete them. It shipped as cascade in migration 0010,
+  // which meant deleting a bucket silently destroyed every contact filed under it
+  // and, through messages.lead_id, every message written to them.
+  bucketId: text("bucket_id").references(() => buckets.id, { onDelete: "set null" }),
   // Set null, not cascade: a hiring manager is still a real contact after the
   // posting they came from is gone. It also unblocks deleteJobsBySource, which
   // currently throws a foreign key violation whenever a lead references a job
@@ -355,8 +361,9 @@ export const trackedCompanies = pgTable("tracked_companies", {
 // Per-user API keys for sources that need them. Kept out of user_settings because
 // each source needs a different shape (bearer token vs app id + secret vs both).
 //
-// NOTE: stored in plaintext today, same as user_settings.apifyApiToken. See
-// AUDIT.md M10 — these should be encrypted at rest before real users arrive.
+// Values are encrypted at rest with AES-256-GCM. That happens in credentials.db,
+// so nothing above it handles ciphertext and nothing below it sees a readable
+// key — see lib/crypto/secret-box.ts.
 
 export const sourceCredentials = pgTable("source_credentials", {
   id: text("id").primaryKey().$defaultFn(() => createId()),

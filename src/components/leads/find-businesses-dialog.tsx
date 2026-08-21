@@ -14,6 +14,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc-client";
+import BucketSelect from "@/components/buckets/bucket-select";
+import { useGetBuckets } from "@/hooks/buckets/useGetBuckets";
 import type { PlaceResult } from "@/lib/places/search-places";
 
 /**
@@ -22,15 +24,23 @@ import type { PlaceResult } from "@/lib/places/search-places";
  * Results are shown and then discarded — Google's terms give no caching
  * exception for names or addresses. Only a business you explicitly save becomes
  * a lead, and from then on it's your record to edit.
+ *
+ * This is the only working source for a clients or suppliers bucket: no free job
+ * feed lists Egyptian trades, and the directories that do prohibit automated
+ * collection. So the bucket seeds the search and receives whatever is saved.
  */
-export default function FindBusinessesDialog() {
+export default function FindBusinessesDialog({ bucketId }: { bucketId?: string | null } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [regionCode, setRegionCode] = useState("eg");
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [savedPlaceIds, setSavedPlaceIds] = useState<string[]>([]);
+  const [saveToBucketId, setSaveToBucketId] = useState<string>(bucketId ?? "");
 
+  const { data: buckets = [] } = useGetBuckets();
   const utils = trpc.useUtils();
+
+  const activeBucket = buckets.find((bucket) => bucket.id === bucketId) ?? null;
 
   // A mutation, not a query: each search is billable, so it must never be
   // re-run by a cache refetch.
@@ -45,6 +55,8 @@ export default function FindBusinessesDialog() {
   const saveAsLead = trpc.places.saveAsLead.useMutation({
     onSuccess: (lead) => {
       utils.leads.getAll.invalidate();
+      // The bucket's contact count is rendered in the switcher above.
+      utils.buckets.getAll.invalidate();
       setSavedPlaceIds((current) => [...current, lead.placeId ?? ""]);
       toast.success(`Saved ${lead.company}.`);
     },
@@ -53,7 +65,18 @@ export default function FindBusinessesDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Button size="sm" variant="outline" className="gap-2" onClick={() => setIsOpen(true)}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-2"
+        onClick={() => {
+          setSaveToBucketId(bucketId ?? "");
+          // Seed the box from the bucket rather than making someone retype what
+          // the bucket already says it's hunting for.
+          setQuery((current) => current || buildQueryFromBucket(activeBucket));
+          setIsOpen(true);
+        }}
+      >
         <Building2 className="h-4 w-4" />
         Find businesses
       </Button>
@@ -93,6 +116,14 @@ export default function FindBusinessesDialog() {
             />
           </div>
         </div>
+
+        <BucketSelect
+          id="placesBucket"
+          value={saveToBucketId}
+          onChange={setSaveToBucketId}
+          label="Save results into"
+          hint="Businesses you save land in this bucket, and its pitch is what messages to them are written from."
+        />
 
         <Button
           className="gap-2"
@@ -146,6 +177,7 @@ export default function FindBusinessesDialog() {
                         phone: place.phone ?? undefined,
                         website: place.website ?? undefined,
                         category: place.category ?? undefined,
+                        bucketId: saveToBucketId || undefined,
                       })
                     }
                   >
@@ -164,4 +196,21 @@ export default function FindBusinessesDialog() {
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Turns a bucket into a plain-language Places query.
+ *
+ * Places takes one natural sentence, not a keyword list, so this uses the first
+ * keyword and the first location rather than joining everything — "paper
+ * suppliers, ورق, printing in Cairo, Giza" matches nothing.
+ */
+function buildQueryFromBucket(
+  bucket: { keywords: string[]; locations: string[] } | null,
+): string {
+  const keyword = bucket?.keywords[0];
+  if (!keyword) return "";
+
+  const location = bucket?.locations[0];
+  return location ? `${keyword} in ${location}` : keyword;
 }

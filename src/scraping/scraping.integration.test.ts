@@ -145,9 +145,8 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
   // second run. This is what stops a double-click from doubling our request rate.
   it("refuses a second running row at the database level", async () => {
     const { db } = await import("@/lib/db");
-    const { insertScrapeRun, isUniqueViolation, finishScrapeRunIfRunning } = await import(
-      "./scraping.db"
-    );
+    const { insertScrapeRun, finishScrapeRunIfRunning } = await import("./scraping.db");
+    const { isUniqueViolation } = await import("@/utils/is-unique-violation");
 
     const first = await insertScrapeRun(db, testUserId, {
       sources: ["remoteok"],

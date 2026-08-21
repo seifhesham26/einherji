@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useApproveMessage } from "@/hooks/messages/useApproveMessage";
 import { useGenerateMessage } from "@/hooks/messages/useGenerateMessage";
+import { TEMPLATE_LABELS, type MessageTemplate } from "@/messages/messages.validators";
 import type { MessageWithContext } from "@/types/message";
 
 interface ApprovalCardProps {
@@ -22,6 +23,15 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
 
   const isEdited = body !== item.message.body;
 
+  const isBusy = approveMessage.isPending || generateMessage.isPending;
+
+  // Written before the two business templates existed, or by a build that didn't
+  // know them — fall back to the raw value rather than rendering "undefined".
+  const templateUsed = (item.message.templateUsed ?? null) as MessageTemplate | null;
+  const templateLabel = templateUsed
+    ? (TEMPLATE_LABELS[templateUsed] ?? templateUsed.replace(/_/g, " "))
+    : "Hiring manager";
+
   async function handleApprove() {
     await approveMessage.mutateAsync({
       messageId: item.message.id,
@@ -32,14 +42,15 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
 
   async function handleRegenerate() {
     if (!item.lead) return;
+    // Reuse whatever this draft was written as. Passing nothing would let the
+    // server re-derive it from the bucket, which is right for a first draft but
+    // would silently switch template under someone regenerating a deliberate one.
     await generateMessage.mutateAsync({
       leadId: item.lead.id,
-      template: (item.message.templateUsed as "hiring_manager" | "recruiter" | "referral") ?? "hiring_manager",
+      template: templateUsed ?? undefined,
     });
     onNext();
   }
-
-  const isBusy = approveMessage.isPending || generateMessage.isPending;
 
   return (
     <Card className="w-full max-w-2xl rounded-xl shadow-sm">
@@ -64,8 +75,8 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
             {item.job && (
               <Badge variant="outline" className="text-xs">{item.job.title}</Badge>
             )}
-            <Badge variant="secondary" className="text-xs capitalize">
-              {item.message.templateUsed?.replace("_", " ") ?? "hiring manager"}
+            <Badge variant="secondary" className="text-xs">
+              {templateLabel}
             </Badge>
           </div>
         </div>

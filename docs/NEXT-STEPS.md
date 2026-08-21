@@ -263,9 +263,14 @@ identically whether a lead was scraped or typed in.
 
 Full ledger: [`paid-services/README.md`](./paid-services/README.md). Best value first:
 
-1. **Upstash QStash** — free tier may well be enough. Removes the 60-second scrape cap.
-2. **Apify credits** — makes "Find Managers" work.
-3. The rest is optional, and I'd argue against X (~$100/mo) and proxy providers.
+1. **Google Places** — needs a card, no free-tier exception. Built and waiting for
+   a key; it turns building your dad's prospect list from typing into searching.
+   Set a daily quota cap as soon as you enable it.
+2. **Upstash QStash** — free tier may well be enough. Removes the 60-second scrape cap.
+3. **Sentry** — free tier, and the daily run is unattended.
+4. **Not Apify** — money doesn't fix Find Managers; the blocker is a LinkedIn
+   session cookie this app deliberately won't use.
+5. **Not X** (~$100/mo) or proxy providers — I'd argue against both.
 
 ---
 

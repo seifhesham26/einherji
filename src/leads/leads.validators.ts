@@ -16,6 +16,9 @@ export const leadStatusSchema = z.enum(leadStatusValues);
 
 export const getLeadsSchema = z.object({
   status: leadStatusSchema.optional(),
+  // Narrow to one hunt. Omitted shows everything, including contacts added
+  // before buckets existed and those whose bucket was later deleted.
+  bucketId: z.string().min(1).optional(),
 });
 
 // Validation only — no transforms. A schema that rewrites its own output gives

@@ -15,7 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc-client";
-import { useGetBuckets } from "@/hooks/buckets/useGetBuckets";
+import BucketSelect from "@/components/buckets/bucket-select";
 import { dedupeParsedLeads, parseLeadList } from "@/leads/parse-lead-list";
 
 const MAX_PER_IMPORT = 200;
@@ -32,12 +32,16 @@ const PREVIEW_ROWS = 8;
  * The preview matters: pasted data is messy, and seeing how 60 rows parsed
  * *before* importing is what stops a bad separator turning into 60 bad contacts.
  */
-export default function ImportLeadsDialog() {
+interface ImportLeadsDialogProps {
+  /** The bucket in view, pre-selected so an import lands where you're looking. */
+  defaultBucketId?: string | null;
+}
+
+export default function ImportLeadsDialog({ defaultBucketId }: ImportLeadsDialogProps = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [text, setText] = useState("");
-  const [bucketId, setBucketId] = useState<string>("");
+  const [bucketId, setBucketId] = useState<string>(defaultBucketId ?? "");
 
-  const { data: buckets = [] } = useGetBuckets();
   const utils = trpc.useUtils();
 
   const importLeads = trpc.leads.createMany.useMutation({
@@ -67,7 +71,15 @@ export default function ImportLeadsDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Button size="sm" variant="outline" className="gap-2" onClick={() => setIsOpen(true)}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="gap-2"
+        onClick={() => {
+          setBucketId(defaultBucketId ?? "");
+          setIsOpen(true);
+        }}
+      >
         <ClipboardPaste className="h-4 w-4" />
         Import list
       </Button>
@@ -93,27 +105,7 @@ export default function ImportLeadsDialog() {
           />
         </div>
 
-        {buckets.length > 0 && (
-          <div className="space-y-1.5">
-            <Label htmlFor="importBucket">Add to bucket</Label>
-            <select
-              id="importBucket"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              value={bucketId}
-              onChange={(event) => setBucketId(event.target.value)}
-            >
-              <option value="">No bucket</option>
-              {buckets.map((bucket) => (
-                <option key={bucket.id} value={bucket.id}>
-                  {bucket.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Keeps these separate from your other contacts.
-            </p>
-          </div>
-        )}
+        <BucketSelect id="importBucket" value={bucketId} onChange={setBucketId} />
 
         {parsed.leads.length > 0 && (
           <div className="rounded-lg border border-border p-3 space-y-2">

@@ -19,10 +19,6 @@ export async function fetchJobs(db: Database, userId: string, input: GetJobsInpu
  * docs/SCRAPER-PLAN.md Phase 4 for the replacement path.
  */
 export async function findAndSaveManagers(db: Database, userId: string, jobId: string) {
-  // The most expensive action in the app — each call runs an Apify actor over up
-  // to MAX_MANAGERS_PER_JOB profiles.
-  await consumeQuota(db, userId, "find_managers");
-
   const [job, settings] = await Promise.all([
     getJobById(db, userId, jobId),
     getSettingsByUserId(db, userId),
@@ -31,6 +27,22 @@ export async function findAndSaveManagers(db: Database, userId: string, jobId: s
   if (!job) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
   }
+
+  // Checked before the quota is charged, not inside the Apify client after it.
+  // Without a token this call cannot even be attempted, and billing the account
+  // for a request that was never made is the one outcome with no defence.
+  if (!settings?.apifyApiToken) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Finding hiring managers needs an Apify API token — add one in Settings → Integrations.",
+    });
+  }
+
+  // The most expensive action in the app — each call runs an Apify actor over up
+  // to MAX_MANAGERS_PER_JOB profiles. Charged here, after the checks that make no
+  // external call, and before the work, so a retry loop can't spend for free.
+  await consumeQuota(db, userId, "find_managers");
 
   const profiles = await findHiringManagers(
     job.company,

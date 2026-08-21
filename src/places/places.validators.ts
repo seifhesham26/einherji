@@ -14,6 +14,9 @@ export const savePlaceAsLeadSchema = z.object({
   phone: z.string().trim().max(50).optional(),
   website: z.string().trim().max(500).optional(),
   category: z.string().trim().max(120).optional(),
+  // Which hunt this business belongs to. Without it a saved supplier lands in
+  // the same undifferentiated list as every hiring manager.
+  bucketId: z.string().min(1).optional(),
 });
 
 export type SearchPlacesInput = z.infer<typeof searchPlacesSchema>;

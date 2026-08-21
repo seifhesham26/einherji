@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import JobCard from "./job-card";
-import BucketBar from "./bucket-bar";
+import BucketBar from "@/components/buckets/bucket-bar";
 import { useGetJobs } from "@/hooks/jobs/useGetJobs";
 import { useScrapeJobs } from "@/hooks/jobs/useScrapeJobs";
 import type { Job } from "@/types/job";
@@ -35,7 +35,7 @@ export default function JobsList() {
 
   return (
     <div className="space-y-6">
-      <BucketBar selectedBucketId={bucketId} onSelect={setBucketId} />
+      <BucketBar selectedBucketId={bucketId} onSelect={setBucketId} countBy="jobs" />
 
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">

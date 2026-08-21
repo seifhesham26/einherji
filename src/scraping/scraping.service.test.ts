@@ -32,10 +32,10 @@ const mocks = {
   fetchAtsJobs: vi.fn(),
 };
 
-vi.mock("./scraping.db", async (importOriginal) => ({
-  // isUniqueViolation is the real one — mocking it would hide the fact that the
-  // code sits on `cause`, which is exactly the bug the live test caught.
-  isUniqueViolation: (await importOriginal<typeof import("./scraping.db")>()).isUniqueViolation,
+// isUniqueViolation is deliberately left unmocked (it lives in @/utils now) —
+// stubbing it would hide the fact that the code sits on `cause`, which is exactly
+// the bug the live test caught.
+vi.mock("./scraping.db", () => ({
   getLatestScrapeRun: (...args: unknown[]) => mocks.getLatestScrapeRun(...args),
   getScrapeRunStatus: (...args: unknown[]) => mocks.getScrapeRunStatus(...args),
   getScrapeRunById: (...args: unknown[]) => mocks.getScrapeRunById(...args),
@@ -63,6 +63,10 @@ vi.mock("@/settings/settings.db", () => ({ getSettingsByUserId: vi.fn(async () =
 const resolvedCompanies = vi.fn(async () => [] as unknown[]);
 vi.mock("@/companies/companies.db", () => ({
   getResolvedCompanies: () => resolvedCompanies(),
+}));
+const requireBucket = vi.fn();
+vi.mock("@/buckets/buckets.service", () => ({
+  requireBucket: (...args: unknown[]) => requireBucket(...args),
 }));
 vi.mock("@/lib/scrapers/ats/fetch-ats-jobs", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -100,6 +104,52 @@ describe("startScrape", () => {
     mocks.consumeQuota.mockResolvedValue(undefined);
     mocks.fetchAtsJobs.mockResolvedValue([]);
     resolvedCompanies.mockResolvedValue([]);
+  });
+
+  // Regression: a bucket with no sources is a deliberate statement — Google
+  // Places needs a card and no free source covers Egyptian trades, so those
+  // buckets are fed by hand. An empty array is falsy, so it used to fall through
+  // to the account defaults and file software job listings under the paper
+  // factory.
+  it("refuses to run a bucket that has no automated sources", async () => {
+    const { startScrape } = await import("./scraping.service");
+    requireBucket.mockResolvedValue({
+      id: "b1",
+      name: "Paper factory — Cairo & Giza",
+      keywords: ["طباعة هندسية"],
+      locations: ["Cairo"],
+      sources: [],
+    });
+
+    await expect(
+      startScrape(db, "user_1", { bucketId: "b1" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    expect(mocks.insertScrapeRun).not.toHaveBeenCalled();
+    expect(mocks.fetchAggregatorJobs).not.toHaveBeenCalled();
+    // Validation makes no external call, so a rejected run must not cost one of
+    // the fifty daily scrapes.
+    expect(mocks.consumeQuota).not.toHaveBeenCalled();
+  });
+
+  it("uses the bucket's own sources when it has them", async () => {
+    const { startScrape } = await import("./scraping.service");
+    requireBucket.mockResolvedValue({
+      id: "b2",
+      name: "Clients for us",
+      keywords: ["mobile app"],
+      locations: [],
+      sources: ["freelancer"],
+    });
+
+    await startScrape(db, "user_1", { bucketId: "b2" });
+
+    // Not the account defaults — the bucket decides.
+    expect(mocks.insertScrapeRun).toHaveBeenCalledWith(
+      db,
+      "user_1",
+      expect.objectContaining({ sources: ["freelancer"] }),
+    );
   });
 
   // Regression: ATS boards returned a company's entire careers page and inserted

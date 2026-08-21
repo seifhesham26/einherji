@@ -4,7 +4,11 @@ import { getSessionCookie } from "better-auth/cookies";
 // Prefix match, so "/login" also covers "/login/reset". "/" is deliberately not
 // in here: every pathname starts with "/", so a startsWith check against it
 // matches everything and waves the whole app through. That was the bug.
-const PUBLIC_PREFIXES = ["/login", "/register", "/verify-email"];
+// "/monitoring" is Sentry's tunnel (next.config.ts, tunnelRoute). Browser error
+// reports POST to it, including from the landing and login pages where nobody is
+// signed in — behind the guard those were redirected to /login instead of
+// reported, so client errors on exactly the public pages went missing.
+const PUBLIC_PREFIXES = ["/login", "/register", "/verify-email", "/monitoring"];
 
 function isPublicPath(pathname: string): boolean {
   // The landing page is public, but only as an exact match.

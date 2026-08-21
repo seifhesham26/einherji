@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateLead } from "@/hooks/leads/useCreateLead";
+import BucketSelect from "@/components/buckets/bucket-select";
 import { createLeadSchema, type CreateLeadInput } from "@/leads/leads.validators";
 
 /**
@@ -29,8 +30,14 @@ import { createLeadSchema, type CreateLeadInput } from "@/leads/leads.validators
  * Only a name and company are required. The optional fields all feed the message
  * prompt, so filling them in produces a noticeably better draft.
  */
-export default function AddLeadDialog() {
+interface AddLeadDialogProps {
+  /** The bucket in view, pre-selected so a new contact lands where you're looking. */
+  defaultBucketId?: string | null;
+}
+
+export default function AddLeadDialog({ defaultBucketId }: AddLeadDialogProps = {}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [bucketId, setBucketId] = useState<string>(defaultBucketId ?? "");
   const createLead = useCreateLead();
 
   const {
@@ -53,7 +60,7 @@ export default function AddLeadDialog() {
 
   async function onSubmit(leadData: CreateLeadInput) {
     try {
-      await createLead.mutateAsync(leadData);
+      await createLead.mutateAsync({ ...leadData, bucketId: bucketId || undefined });
       reset();
       setIsOpen(false);
     } catch {
@@ -64,7 +71,14 @@ export default function AddLeadDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Button size="sm" className="gap-2" onClick={() => setIsOpen(true)}>
+      <Button
+        size="sm"
+        className="gap-2"
+        onClick={() => {
+          setBucketId(defaultBucketId ?? "");
+          setIsOpen(true);
+        }}
+      >
         <Plus className="h-4 w-4" />
         Add lead
       </Button>
@@ -105,6 +119,13 @@ export default function AddLeadDialog() {
             <Label htmlFor="title">Job title</Label>
             <Input id="title" placeholder="VP Engineering" {...register("title")} />
           </div>
+
+          <BucketSelect
+            id="addLeadBucket"
+            value={bucketId}
+            onChange={setBucketId}
+            hint="Decides how messages to this contact are written — a client bucket pitches, a supplier bucket enquires."
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor="linkedinUrl">LinkedIn URL</Label>

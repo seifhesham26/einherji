@@ -4,16 +4,35 @@ import { jobSourceNameSchema } from "@/lib/scrapers/job-source.types";
 export const bucketKindValues = ["jobs", "clients", "suppliers", "custom"] as const;
 export const bucketKindSchema = z.enum(bucketKindValues);
 
-export const createBucketSchema = z.object({
+// The fields themselves, with no defaults attached. Create and update each apply
+// their own, because they need opposite behaviour for an omitted key.
+const bucketFieldsSchema = z.object({
   name: z.string().trim().min(1, "Give the bucket a name").max(80),
+  kind: bucketKindSchema,
+  keywords: z.array(z.string().trim().min(1)).max(30),
+  locations: z.array(z.string().trim().min(1)).max(30),
+  sources: z.array(jobSourceNameSchema).max(30),
+  pitch: z.string().trim().max(2000).optional(),
+});
+
+export const createBucketSchema = bucketFieldsSchema.extend({
   kind: bucketKindSchema.default("jobs"),
   keywords: z.array(z.string().trim().min(1)).max(30).default([]),
   locations: z.array(z.string().trim().min(1)).max(30).default([]),
   sources: z.array(jobSourceNameSchema).max(30).default([]),
-  pitch: z.string().trim().max(2000).optional(),
 });
 
-export const updateBucketSchema = createBucketSchema.partial().extend({
+/**
+ * A partial change to one bucket. Every field is optional and *none* defaults.
+ *
+ * Built from the undefaulted fields rather than `createBucketSchema.partial()`,
+ * which reads as though it would leave an omitted key absent and does not: Zod
+ * applies a wrapped `.default()` even under `.partial()`, so parsing
+ * `{ id, name }` against that schema yields keywords, locations and sources as
+ * empty arrays and kind reset to "jobs". Renaming a bucket would have silently
+ * erased its entire search.
+ */
+export const updateBucketSchema = bucketFieldsSchema.partial().extend({
   id: z.string().min(1),
   isArchived: z.boolean().optional(),
 });

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetLeads } from "@/hooks/leads/useGetLeads";
+import BucketBar from "@/components/buckets/bucket-bar";
 import AddLeadDialog from "./add-lead-dialog";
 import FindBusinessesDialog from "./find-businesses-dialog";
 import ImportLeadsDialog from "./import-leads-dialog";
@@ -52,8 +53,9 @@ export default function LeadsTable() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
+  const [bucketId, setBucketId] = useState<string | null>(null);
 
-  const { data: leads = [], isLoading } = useGetLeads();
+  const { data: leads = [], isLoading } = useGetLeads({ bucketId: bucketId ?? undefined });
   const generateMessage = useGenerateMessage();
 
   const filtered = leads.filter((lead) => {
@@ -66,24 +68,30 @@ export default function LeadsTable() {
   });
 
   async function handleGenerateMessage(leadId: string) {
-    await generateMessage.mutateAsync({ leadId, template: "hiring_manager" });
+    // No template named on purpose — the server picks one from the lead's bucket,
+    // so a supplier gets a purchasing enquiry rather than a job application.
+    await generateMessage.mutateAsync({ leadId });
     router.push("/messages");
   }
 
   return (
     <div className="space-y-6">
+      <BucketBar selectedBucketId={bucketId} onSelect={setBucketId} countBy="leads" />
+
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Leads</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            People to reach out to about your target jobs.
+            {bucketId
+              ? "Contacts filed under this bucket."
+              : "Everyone you're reaching out to, across every bucket."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <ImportLeadsDialog />
-          <FindBusinessesDialog />
-          <AddLeadDialog />
+          <ImportLeadsDialog defaultBucketId={bucketId} />
+          <FindBusinessesDialog bucketId={bucketId} />
+          <AddLeadDialog defaultBucketId={bucketId} />
         </div>
       </div>
 
@@ -126,14 +134,17 @@ export default function LeadsTable() {
           </div>
           <div className="space-y-3">
             <div>
-              <p className="text-sm font-medium">No leads yet</p>
+              <p className="text-sm font-medium">
+                {bucketId ? "Nothing in this bucket yet" : "No leads yet"}
+              </p>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                Add the hiring manager or contact for a role you want, then generate a
-                message to them.
+                {bucketId
+                  ? "Add contacts with Find businesses or Import list, and they'll be filed here."
+                  : "Add the hiring manager or contact for a role you want, then generate a message to them."}
               </p>
             </div>
             <div className="flex justify-center">
-              <AddLeadDialog />
+              <AddLeadDialog defaultBucketId={bucketId} />
             </div>
           </div>
         </div>

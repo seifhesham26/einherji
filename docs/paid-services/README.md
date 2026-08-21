@@ -86,7 +86,39 @@ use honestly. No code changes needed afterwards — just enable the source.
 
 Ordered by what I'd buy first for the money.
 
-### 1. Apify — ⛔ blocked, and money won't fix it
+### 1. Google Places — pay as you go, needs a card
+- **Unlocks:** business search for your dad's paper business — engineering firms,
+  contractors and print shops in Cairo and Giza, with phone numbers.
+- **Code status:** ✅ built and waiting for a key. Settings → Source credentials →
+  Google Places, then Leads → Find businesses.
+- **Blocked on:** Google requires a billing account with a card. **No free-tier
+  exception** — you can't sign up without one.
+- **What it actually buys you:** less typing. It does not unlock anything the
+  manual route can't do, and given the data I measured, a list you build by hand
+  from Google Maps is *better targeted* than a category query would be. Treat it
+  as a convenience, not a capability.
+- **Protect yourself when you do get a card:** APIs & Services → Places API (New)
+  → Quotas → set requests-per-day to ~100. Budget alerts only email you; a quota
+  is what actually prevents a charge.
+- **Free alternatives don't work** — verified. OpenStreetMap across Cairo *and*
+  Giza returns 6 copy shops and 1 printing business, with 30 phone numbers total,
+  none of them paper buyers. LatLng, LocationIQ and Geoapify are the same OSM data
+  behind a signup.
+
+### 2. Upstash QStash — free tier, then cheap
+- **Unlocks:** the daily cron stops doing the work itself and hands out one message per account, so each gets its own invocation and full timeout — plus automatic retries.
+- **Code status:** ✅ built. Set `QSTASH_TOKEN` and both signing keys; without them the run happens inline, which is fine for one account.
+- **Worth it because:** it's what makes the daily run survive more than one user. The free tier is likely enough on its own.
+
+### 3. SerpAPI — free tier, then per-search
+- **Unlocks:** lead discovery via search results, without touching LinkedIn directly.
+- **Sign up:** https://serpapi.com/users/sign_up
+- **Code status:** ⚠️ partial. It's declared in the source registry and can hold credentials, but **there is no fetcher for it** — `source-registry.test.ts` explicitly skips it for that reason.
+
+### 4. An email-finding service — genuinely paid
+- **Unlocks:** the last product gap. See [email-finding.md](./email-finding.md) — this one needs a decision from you before any code, and there's a free option worth reading first.
+
+### 5. Apify — ⛔ blocked, and money won't fix it
 - **Unlocks:** "Find Managers" — the only remaining Apify dependency.
 - **Status: broken, verified 2026-08-18.** Clicking Find Managers returns
   `Field input.cookie is required, Field input.proxy is required`. The actor
@@ -111,25 +143,12 @@ Ordered by what I'd buy first for the money.
      commissioning the scrape.
 - The app now fails with a plain explanation instead of a raw 500.
 
-### 2. Upstash QStash — free tier, then cheap
-- **Unlocks:** removes the 60-second scrape budget. Right now selecting all 21 sources means the run gets cut off partway; you're capped at whatever fits in a minute.
-- **Code status:** ❌ not built. This is Phase 3.5 in `docs/SCRAPER-PLAN.md`.
-- **Worth it because:** it's the ceiling on the scraper you already have. Best value-per-pound on this list, and the free tier may well be enough.
-
-### 3. SerpAPI — free tier, then per-search
-- **Unlocks:** lead discovery via search results, without touching LinkedIn directly.
-- **Sign up:** https://serpapi.com/users/sign_up
-- **Code status:** ⚠️ partial. It's declared in the source registry and can hold credentials, but **there is no fetcher for it** — `source-registry.test.ts` explicitly skips it for that reason.
-
-### 4. An email-finding service — genuinely paid
-- **Unlocks:** the last product gap. See [email-finding.md](./email-finding.md) — this one needs a decision from you before any code, and there's a free option worth reading first.
-
-### 5. X / Twitter API — roughly $100/mo
+### 6. X / Twitter API — roughly $100/mo
 - **Unlocks:** hiring posts on X.
 - **Code status:** ✅ done. Save `bearerToken` under Settings → Source credentials.
 - **Honest view:** the worst value here. It costs more than everything else combined and duplicates sources you already have for free. Buy this last, if ever.
 
-### 6. An unblocking proxy — varies a lot
+### 7. An unblocking proxy — varies a lot
 - **Unlocks:** Indeed, Glassdoor, Wellfound. They serve JavaScript shells or block datacenter IPs outright.
 - **Code status:** ❌ not built. The `scrapingProxyProvider` / `scrapingProxyApiKey` columns exist and **nothing reads them**.
 - **Honest view:** don't. This is an arms race you'd be maintaining forever, and Adzuna covers most of the same postings for free.
@@ -146,11 +165,18 @@ Ordered by what I'd buy first for the money.
 
 ## When money arrives, in this order
 
-1. **Adzuna** — £0, today. One more source for a signup form.
-2. **QStash** — likely free, and it unlocks the scraper you already paid for in effort.
-3. **Apify credits** — makes Find Managers real.
-4. **Email finding** — only after reading the decision doc; the free option may be enough.
-5. Everything else is optional and two of them I'd argue against.
+1. **Google Places** — the only thing on this list genuinely gated on having a
+   card, and the only one that changes your dad's day-to-day. Modest pay-as-you-go
+   cost, and cap the daily quota the moment you enable it.
+2. **QStash** — free tier is likely enough. Removes the 60-second scrape cap.
+3. **Sentry** — free tier. Worth doing before the daily run has been unattended
+   for a few weeks.
+4. **Email finding** — only after reading the decision doc; the free assisted-send
+   path may be all you need.
+5. **Not Apify.** It's on the ledger, but money doesn't fix it — the blocker is a
+   LinkedIn session cookie this app won't use. Don't buy credits expecting Find
+   Managers to start working.
+6. **Not X.** ~$100/mo to duplicate sources you already have free.
 
 ---
 

@@ -16,7 +16,7 @@ import type {
 } from "./leads.validators";
 
 export async function fetchLeads(db: Database, userId: string, input: GetLeadsInput) {
-  return getAllLeads(db, userId, input.status);
+  return getAllLeads(db, userId, { status: input.status, bucketId: input.bucketId });
 }
 
 /**

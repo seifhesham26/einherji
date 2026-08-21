@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
 import { Skeleton } from "@/components/ui/skeleton";
+import BucketBar from "@/components/buckets/bucket-bar";
 import KanbanColumn from "./kanban-column";
 import { useGetLeads } from "@/hooks/leads/useGetLeads";
 import { useUpdateLead } from "@/hooks/leads/useUpdateLead";
@@ -19,7 +21,9 @@ const COLUMNS: { id: LeadStatus; title: string }[] = [
 ];
 
 export default function KanbanBoard() {
-  const { data: leads = [], isLoading } = useGetLeads();
+  const [bucketId, setBucketId] = useState<string | null>(null);
+
+  const { data: leads = [], isLoading } = useGetLeads({ bucketId: bucketId ?? undefined });
   const updateLead = useUpdateLead();
 
   function handleDragEnd(result: DropResult) {
@@ -35,11 +39,14 @@ export default function KanbanBoard() {
 
   return (
     <div className="space-y-6">
+      <BucketBar selectedBucketId={bucketId} onSelect={setBucketId} countBy="leads" />
+
       {/* Page header */}
       <div>
         <h1 className="text-xl font-semibold">Tracker</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Drag leads across columns to update their status.
+          {bucketId ? " Showing one bucket." : ""}
         </p>
       </div>
 

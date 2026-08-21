@@ -3,12 +3,20 @@ import type { Database } from "@/lib/db";
 import { leads } from "@/lib/db/schema";
 import type { LeadStatus, UpdateLeadInput } from "./leads.validators";
 
-export async function getAllLeads(db: Database, userId: string, status?: LeadStatus) {
-  const baseWhere = status
-    ? and(eq(leads.userId, userId), eq(leads.status, status))
-    : eq(leads.userId, userId);
+export async function getAllLeads(
+  db: Database,
+  userId: string,
+  filters: { status?: LeadStatus; bucketId?: string } = {},
+) {
+  const conditions = [eq(leads.userId, userId)];
+  if (filters.status) conditions.push(eq(leads.status, filters.status));
+  if (filters.bucketId) conditions.push(eq(leads.bucketId, filters.bucketId));
 
-  return db.select().from(leads).where(baseWhere).orderBy(desc(leads.createdAt));
+  return db
+    .select()
+    .from(leads)
+    .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+    .orderBy(desc(leads.createdAt));
 }
 
 // userId is a required argument on every function in this file, not an optional
