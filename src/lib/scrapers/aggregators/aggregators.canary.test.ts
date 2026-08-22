@@ -8,6 +8,7 @@ import { himalayasSource } from "./himalayas";
 import { weWorkRemotelySource } from "./weworkremotely";
 import { hackerNewsFreelanceSource, hackerNewsSource } from "./hackernews";
 import { freelancerSource } from "./freelancer";
+import { wuzzufSource } from "./wuzzuf";
 
 // Live canary suite for the free aggregators. Opt-in:
 //
@@ -68,6 +69,31 @@ describeCanary("free aggregators (live)", () => {
     expect(jobs.length).toBeGreaterThan(0);
     expect(jobs.every((job) => job.workType === "freelance")).toBe(true);
   }, 90_000);
+
+  // Wuzzuf is location-scoped by nature, so it can't ride the shared broad query.
+  // Two failure modes worth watching separately: the sitemap moving or gaining a
+  // Cloudflare challenge, and the detail-page markup drifting away from the SEO
+  // tags the parser anchors on.
+  it("wuzzuf returns schema-valid Egyptian jobs", async () => {
+    const jobs = await wuzzufSource.fetchJobs({
+      titles: ["engineer", "accountant", "sales"],
+      locations: ["Cairo, Egypt"],
+    });
+
+    expect(jobs.length).toBeGreaterThan(0);
+
+    for (const job of jobs) {
+      expect(() => scrapedJobSchema.parse(job)).not.toThrow();
+      expect(job.source).toBe("wuzzuf");
+      expect(job.company.trim()).toBeTruthy();
+      // The parser used to return the emotion stylesheet as the description.
+      expect(job.description ?? "").not.toMatch(/\.css-|font-size:/);
+    }
+
+    // Everything the sitemap filter selected should be Egyptian.
+    expect(jobs.some((job) => /egypt/i.test(job.location ?? ""))).toBe(true);
+    expectUniqueIds(jobs);
+  }, 120_000);
 
   it("hn freelance thread returns client leads, not freelancers advertising", async () => {
     const jobs = await hackerNewsFreelanceSource.fetchJobs({ titles: [], locations: [] });

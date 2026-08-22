@@ -40,6 +40,10 @@ const STARTER_BUCKETS: CreateBucketInput[] = [
       "jobicy",
       "himalayas",
       "weworkremotely",
+      // The Egypt half of this bucket. The remote boards above have no Cairo
+      // coverage at all, and Adzuna has no Egypt index to offer one.
+      "wuzzuf",
+      "linkedin_guest",
     ],
     pitch:
       "Full-stack developer building web and mobile applications — React, Next.js, TypeScript, React Native. Available remotely or in Cairo.",

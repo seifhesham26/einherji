@@ -4,6 +4,7 @@ import { atsRateLimiter } from "../http/rate-limiter";
 import { CircuitOpenError } from "../http/scrape-error";
 import { parseArrayLeniently, parseScrapedJob, type JobSearchQuery, type ScrapedJob } from "../job-source.types";
 import { detectIsRemote, normalizeWorkType } from "../normalize-work-type";
+import { SourceNotApplicableError } from "../source-not-applicable-error";
 import { matchesQuery } from "./match-query";
 
 const ADZUNA_API_URL = "https://api.adzuna.com/v1/api/jobs";
@@ -62,12 +63,13 @@ export async function fetchAdzunaJobs(
 
   // Adzuna resolves `where` *inside* the country in the path, so an uncovered
   // location used to fall back to `gb` and then search the UK index for, say,
-  // "Cairo" — a query that can only ever return zero results. Say so instead.
+  // "Cairo" — a query that can only ever return zero results. Not a failure
+  // either: Adzuna has no Egypt index and never will, so retrying can't help.
   if (!match && searchableLocations.length > 0) {
-    throw new Error(
-      `Adzuna has no index covering ${searchableLocations.join(", ")}. ` +
-        `It supports: ${SUPPORTED_COUNTRY_CODES.join(", ")}. ` +
-        `Drop Adzuna from this search, or add a location it covers.`,
+    throw new SourceNotApplicableError(
+      "adzuna",
+      `no index covering ${searchableLocations.join(", ")} ` +
+        `(it covers ${SUPPORTED_COUNTRY_CODES.join(", ")})`,
     );
   }
 

@@ -12,9 +12,11 @@ import { himalayasSource } from "./himalayas";
 import { jobicySource } from "./jobicy";
 import { fetchRedditJobs } from "./reddit";
 import { remoteOkSource } from "./remoteok";
+import { fetchSerpApiJobs } from "./serpapi";
 import { theMuseSource } from "./themuse";
 import { fetchTwitterJobs } from "./twitter";
 import { weWorkRemotelySource } from "./weworkremotely";
+import { wuzzufSource } from "./wuzzuf";
 
 // Sources that need nothing but a network connection.
 const FREE_AGGREGATORS = [
@@ -27,6 +29,7 @@ const FREE_AGGREGATORS = [
   hackerNewsSource,
   hackerNewsFreelanceSource,
   freelancerSource,
+  wuzzufSource,
 ];
 
 const FREE_AGGREGATORS_BY_NAME = new Map(
@@ -52,6 +55,8 @@ const CREDENTIALED_AGGREGATORS: Partial<Record<JobSourceName, CredentialedFetche
     ),
   twitter: (credentials, query, signal) =>
     fetchTwitterJobs({ bearerToken: credentials.bearerToken }, query, signal),
+  serpapi: (credentials, query, signal) =>
+    fetchSerpApiJobs({ apiKey: credentials.apiKey }, query, signal),
 };
 
 export function isAggregatorSource(source: JobSourceName): boolean {

@@ -89,6 +89,8 @@ export const jobSourceEnum = pgEnum("job_source", [
   "himalayas",
   "weworkremotely",
   "hackernews",
+  // Egypt / MENA — read from the sitemap Wuzzuf publishes for crawlers
+  "wuzzuf",
   // Freelance / contract marketplaces
   "freelancer",
   "hackernews_freelance",

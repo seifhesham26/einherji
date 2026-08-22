@@ -19,6 +19,7 @@ export const jobSourceNameSchema = z.enum([
   "himalayas",
   "weworkremotely",
   "hackernews",
+  "wuzzuf",
   "freelancer",
   "hackernews_freelance",
   "adzuna",

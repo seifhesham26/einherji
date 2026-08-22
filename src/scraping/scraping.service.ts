@@ -14,6 +14,7 @@ import {
 import { linkedInJobSource } from "@/lib/scrapers/linkedin/search-jobs";
 import { matchesQuery } from "@/lib/scrapers/aggregators/match-query";
 import { getSourceDefinition } from "@/lib/scrapers/source-registry";
+import { SourceNotApplicableError } from "@/lib/scrapers/source-not-applicable-error";
 import { requireBucket } from "@/buckets/buckets.service";
 import { consumeQuota } from "@/usage/usage.service";
 import type {
@@ -175,6 +176,9 @@ export async function startScrape(db: Database, userId: string, input: StartScra
   const abortController = new AbortController();
   const budgetTimer = setTimeout(() => abortController.abort(), MAX_RUN_DURATION_MS);
   const taskErrors: string[] = [];
+  // Sources that ran fine but structurally can't cover this search. Kept apart
+  // from taskErrors so a permanent mismatch doesn't read as a broken scraper.
+  const taskNotices: string[] = [];
 
   // Cancelling writes "cancelled" to the row from a different request; this is how
   // the loop notices. Without it a cancel only changed the row until this run
@@ -202,6 +206,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
         bucket?.id ?? null,
         abortController.signal,
         taskErrors,
+        taskNotices,
       );
     }
 
@@ -219,7 +224,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
     // was persisted. Say so explicitly so the user knows there's more to fetch.
     return finishScrapeRunIfRunning(db, run.id, {
       status: "completed",
-      errorMessage: summariseOutcome(abortController.signal.aborted, taskErrors),
+      errorMessage: summariseOutcome(abortController.signal.aborted, taskErrors, taskNotices),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scrape failed";
@@ -254,7 +259,11 @@ async function assertNoRunInFlight(db: Database, userId: string) {
  * indistinguishable from a board with no openings — both showed zero jobs and no
  * error. Two real bugs hid behind exactly that.
  */
-function summariseOutcome(hitTimeBudget: boolean, taskErrors: string[]): string | null {
+function summariseOutcome(
+  hitTimeBudget: boolean,
+  taskErrors: string[],
+  taskNotices: string[] = [],
+): string | null {
   const parts: string[] = [];
 
   if (hitTimeBudget) {
@@ -267,6 +276,13 @@ function summariseOutcome(hitTimeBudget: boolean, taskErrors: string[]): string 
     parts.push(
       `${taskErrors.length} source${taskErrors.length === 1 ? "" : "s"} failed: ${shown}` +
         (remaining > 0 ? ` (and ${remaining} more)` : ""),
+    );
+  }
+
+  // Notices go last: nothing is broken, so they shouldn't be the first thing read.
+  if (taskNotices.length > 0) {
+    parts.push(
+      `${taskNotices.join("; ")}. Remove ${taskNotices.length === 1 ? "it" : "them"} from this search to stop the reminder.`,
     );
   }
 
@@ -325,6 +341,7 @@ async function runAggregatorTask(
   bucketId: string | null,
   signal: AbortSignal,
   taskErrors: string[],
+  taskNotices: string[],
 ) {
   if (signal.aborted) {
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
@@ -346,7 +363,16 @@ async function runAggregatorTask(
       jobsInserted: inserted.length,
     });
   } catch (error) {
-    taskErrors.push(describeError(getSourceDefinition(source)?.name ?? source, error));
+    const label = getSourceDefinition(source)?.name ?? source;
+
+    // A source that can't cover this search isn't a failure — no retry, no fix,
+    // and nothing the user needs to act on beyond deselecting it.
+    if (error instanceof SourceNotApplicableError) {
+      taskNotices.push(`${label} skipped — ${error.reason}`);
+    } else {
+      taskErrors.push(describeError(label, error));
+    }
+
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
   }
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetCircuitBreakers } from "../http/fetch-with-retry";
 import type { JobSearchQuery } from "../job-source.types";
+import { SourceNotApplicableError } from "../source-not-applicable-error";
 import { fetchAdzunaJobs } from "./adzuna";
 
 const credentials = { appId: "app-id", apiKey: "api-key" };
@@ -55,10 +56,14 @@ describe("fetchAdzunaJobs", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(
-      fetchAdzunaJobs(credentials, buildQuery({ locations: ["Cairo"] })),
-    ).rejects.toThrow(/no index covering Cairo/i);
+    const error = await fetchAdzunaJobs(
+      credentials,
+      buildQuery({ locations: ["Cairo"] }),
+    ).catch((caught: unknown) => caught);
 
+    // Not a plain Error: the run summary reports this as a skip, not a failure.
+    expect(error).toBeInstanceOf(SourceNotApplicableError);
+    expect((error as SourceNotApplicableError).reason).toMatch(/no index covering Cairo/i);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

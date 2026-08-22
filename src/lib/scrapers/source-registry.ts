@@ -136,6 +136,14 @@ export const SOURCE_DEFINITIONS: SourceDefinition[] = [
     description: "The monthly thread, parsed into jobs. Strong for startups.",
     credentialFields: [],
   },
+  {
+    id: "wuzzuf",
+    name: "Wuzzuf",
+    tier: "aggregator",
+    description:
+      "Egypt's largest job board. Free, no key — read from the sitemap it publishes for crawlers, since its search page is robots-disallowed.",
+    credentialFields: [],
+  },
 
   // ─── Freelance / client work ────────────────────────────────────────────────
   {
@@ -201,12 +209,12 @@ export const SOURCE_DEFINITIONS: SourceDefinition[] = [
     name: "Search (SerpAPI)",
     tier: "aggregator",
     description:
-      "Google Jobs results, plus profile lookup for lead discovery without touching LinkedIn.",
+      "Google Jobs — the only aggregator with real Egypt coverage, since it indexes Wuzzuf, Bayt and Indeed Egypt. Also does profile lookup for lead discovery without touching LinkedIn.",
     signupUrl: "https://serpapi.com/users/sign_up",
     credentialFields: [
       { key: "apiKey", label: "API Key", placeholder: "…", isSecret: true },
     ],
-    costNote: "Free tier, then paid per search",
+    costNote: "Free tier is 100 searches/month. One search per keyword, doubled if the bucket wants remote as well as a place.",
   },
 
   // ─── Scraped ────────────────────────────────────────────────────────────────

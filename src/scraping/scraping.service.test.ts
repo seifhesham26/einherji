@@ -299,6 +299,29 @@ describe("startScrape", () => {
     expect(mocks.recordTaskProgress).toHaveBeenCalledTimes(2);
   });
 
+  // Adzuna has no Egypt index, so a Cairo bucket can never get results from it.
+  // Reporting that as "1 source failed" on every single run is how a user learns
+  // to ignore the summary line that real failures also arrive on.
+  it("reports a source that cannot cover the search as a skip, not a failure", async () => {
+    const { startScrape } = await import("./scraping.service");
+    const { SourceNotApplicableError } = await import(
+      "@/lib/scrapers/source-not-applicable-error"
+    );
+
+    mocks.fetchAggregatorJobs.mockImplementation(async (source: string) => {
+      if (source === "adzuna") {
+        throw new SourceNotApplicableError("adzuna", "no index covering Cairo, Egypt");
+      }
+      return [];
+    });
+
+    const result = await startScrape(db, "user_1", { sources: ["adzuna", "remoteok"] });
+
+    expect(result?.status).toBe("completed");
+    expect(result?.errorMessage).not.toMatch(/failed/i);
+    expect(result?.errorMessage).toMatch(/skipped — no index covering Cairo, Egypt/i);
+  });
+
   it("says nothing when every source succeeds", async () => {
     const { startScrape } = await import("./scraping.service");
 
