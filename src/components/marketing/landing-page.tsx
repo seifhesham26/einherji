@@ -116,7 +116,7 @@ function Hero() {
   const { data: session } = useSession();
 
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-[#030303]">
+    <section className="relative min-h-dvh flex flex-col items-center justify-center overflow-hidden bg-[#030303]">
       {/* Background layers */}
       <div className="absolute inset-0">
         {/* Grid */}
@@ -660,7 +660,7 @@ function Footer() {
 
 export default function LandingPage() {
   return (
-    <div className="bg-[#030303] min-h-screen">
+    <div className="bg-[#030303] min-h-dvh">
       <Nav />
       <Hero />
       <Marquee />

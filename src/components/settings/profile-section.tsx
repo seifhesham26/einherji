@@ -43,12 +43,16 @@ export default function ProfileSection() {
         return;
       }
     }
-    // Save profile extras (job title, linkedin) to user settings
-    await updateProfile.mutateAsync({
-      name: data.name,
-      jobTitle: data.jobTitle,
-      linkedinUrl: data.linkedinUrl,
-    });
+    // Save profile extras (job title, linkedin) to user settings. The mutation
+    // reports its own failure; catching keeps a rejected save from surfacing as
+    // an unhandled rejection in the console instead.
+    await updateProfile
+      .mutateAsync({
+        name: data.name,
+        jobTitle: data.jobTitle,
+        linkedinUrl: data.linkedinUrl,
+      })
+      .catch(() => undefined);
   }
 
   return (

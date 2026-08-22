@@ -1,27 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
 import { Skeleton } from "@/components/ui/skeleton";
 import BucketBar from "@/components/buckets/bucket-bar";
 import KanbanColumn from "./kanban-column";
+import { useBucketFilter } from "@/hooks/buckets/useBucketFilter";
 import { useGetLeads } from "@/hooks/leads/useGetLeads";
 import { useUpdateLead } from "@/hooks/leads/useUpdateLead";
+import {
+  LEAD_STATUS_DISPLAY,
+  LEAD_STATUS_ORDER,
+} from "@/components/leads/lead-status-display";
 import type { LeadStatus } from "@/leads/leads.validators";
 
-const COLUMNS: { id: LeadStatus; title: string }[] = [
-  { id: "not_contacted", title: "Not Contacted" },
-  { id: "message_sent", title: "Message Sent" },
-  { id: "reply_received", title: "Reply Received" },
-  { id: "call_scheduled", title: "Call Scheduled" },
-  { id: "interview", title: "Interview" },
-  { id: "offer", title: "Offer" },
-  { id: "rejected", title: "Rejected" },
-  { id: "no_response", title: "No Response" },
-];
-
 export default function KanbanBoard() {
-  const [bucketId, setBucketId] = useState<string | null>(null);
+  const { bucketId, selectBucket } = useBucketFilter();
 
   const { data: leads = [], isLoading } = useGetLeads({ bucketId: bucketId ?? undefined });
   const updateLead = useUpdateLead();
@@ -31,7 +24,7 @@ export default function KanbanBoard() {
     if (!destination) return;
 
     const newStatus = destination.droppableId as LeadStatus;
-    const lead = leads.find((l) => l.id === draggableId);
+    const lead = leads.find((candidate) => candidate.id === draggableId);
     if (!lead || lead.status === newStatus) return;
 
     updateLead.mutate({ id: draggableId, status: newStatus });
@@ -39,35 +32,45 @@ export default function KanbanBoard() {
 
   return (
     <div className="space-y-6">
-      <BucketBar selectedBucketId={bucketId} onSelect={setBucketId} countBy="leads" />
-
-      {/* Page header */}
       <div>
         <h1 className="text-xl font-semibold">Tracker</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Drag leads across columns to update their status.
+          Drag a contact between columns to change their status.
           {bucketId ? " Showing one bucket." : ""}
         </p>
       </div>
 
+      <BucketBar selectedBucketId={bucketId} onSelect={selectBucket} countBy="leads" />
+
       {isLoading ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {COLUMNS.map((col) => (
-            <div key={col.id} className="flex flex-col gap-2 min-w-[220px]">
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {LEAD_STATUS_ORDER.map((status) => (
+            <div key={status} className="flex flex-col gap-2 min-w-[220px]">
               <Skeleton className="h-6 w-32 rounded-full" />
               <Skeleton className="h-40 w-full rounded-xl" />
             </div>
           ))}
         </div>
+      ) : leads.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-16 text-center">
+          <p className="text-sm font-medium">
+            {bucketId ? "Nothing in this bucket yet" : "No contacts to track"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Contacts appear here as soon as you add them on the Leads page.
+          </p>
+        </div>
       ) : (
         <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="flex gap-3 overflow-x-auto pb-4">
-            {COLUMNS.map((column) => (
+          {/* scrollbar-thin keeps the eight-column board scrollable without the
+              default bar reading as a divider under the last row of cards. */}
+          <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin">
+            {LEAD_STATUS_ORDER.map((status) => (
               <KanbanColumn
-                key={column.id}
-                columnId={column.id}
-                title={column.title}
-                leads={leads.filter((lead) => (lead.status ?? "not_contacted") === column.id)}
+                key={status}
+                columnId={status}
+                title={LEAD_STATUS_DISPLAY[status].label}
+                leads={leads.filter((lead) => (lead.status ?? "not_contacted") === status)}
               />
             ))}
           </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Copy, ExternalLink, Loader2, Send } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -59,7 +60,16 @@ export default function ReadyToSendList() {
 
 function ReadyToSendCard({ item }: { item: MessageWithContext }) {
   const [hasCopied, setHasCopied] = useState(false);
+  const resetCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markSent = useMarkMessageSent();
+
+  // Marking a message sent unmounts this card while the timer is still pending,
+  // and the callback would then set state on a component that's gone.
+  useEffect(() => {
+    return () => {
+      if (resetCopiedTimer.current) clearTimeout(resetCopiedTimer.current);
+    };
+  }, []);
 
   // An edited message is the version the user rewrote — that's what they'll send.
   const bodyToSend = item.message.editedBody ?? item.message.body;
@@ -68,11 +78,15 @@ function ReadyToSendCard({ item }: { item: MessageWithContext }) {
     try {
       await navigator.clipboard.writeText(bodyToSend);
       setHasCopied(true);
-      setTimeout(() => setHasCopied(false), COPIED_FEEDBACK_MS);
+      if (resetCopiedTimer.current) clearTimeout(resetCopiedTimer.current);
+      resetCopiedTimer.current = setTimeout(() => setHasCopied(false), COPIED_FEEDBACK_MS);
     } catch {
-      // Clipboard access can be refused (insecure origin, denied permission).
-      // Silent failure would look like the button doing nothing at all.
+      // Clipboard access can be refused: an insecure origin, or a denied
+      // permission prompt. The old branch just cleared the flag, which is
+      // exactly the "button does nothing" it was written to avoid — so say so,
+      // and say what to do instead.
       setHasCopied(false);
+      toast.error("Couldn't reach the clipboard. Select the message text and copy it manually.");
     }
   }
 

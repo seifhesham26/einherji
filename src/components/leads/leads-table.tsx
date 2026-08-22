@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ExternalLink, MessageSquarePlus, Search, Users } from "lucide-react";
+import { Loader2, ExternalLink, MessageSquarePlus, Search, SearchX, Users, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -10,41 +10,23 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGetLeads } from "@/hooks/leads/useGetLeads";
+import { useBucketFilter } from "@/hooks/buckets/useBucketFilter";
+import { useQueryFilter } from "@/hooks/useQueryFilter";
 import BucketBar from "@/components/buckets/bucket-bar";
 import AddLeadDialog from "./add-lead-dialog";
 import FindBusinessesDialog from "./find-businesses-dialog";
 import ImportLeadsDialog from "./import-leads-dialog";
+import { LEAD_STATUS_DISPLAY, LEAD_STATUS_ORDER, getLeadStatusDisplay } from "./lead-status-display";
 import { useGenerateMessage } from "@/hooks/messages/useGenerateMessage";
 import { formatRelativeDate } from "@/utils/format-relative-date";
-import type { LeadStatus } from "@/leads/leads.validators";
-
-const STATUS_LABELS: Record<string, string> = {
-  not_contacted: "Not Contacted",
-  message_sent: "Message Sent",
-  reply_received: "Reply Received",
-  call_scheduled: "Call Scheduled",
-  interview: "Interview",
-  offer: "Offer",
-  rejected: "Rejected",
-  no_response: "No Response",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  not_contacted: "bg-muted text-muted-foreground border-transparent",
-  message_sent: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  reply_received: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
-  call_scheduled: "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  interview: "bg-violet-500/10 text-violet-500 border-violet-500/20",
-  offer: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-  rejected: "bg-red-500/10 text-red-500 border-red-500/20",
-  no_response: "bg-muted text-muted-foreground border-transparent",
-};
 
 function LeadAvatar({ firstName, lastName }: { firstName: string; lastName?: string | null }) {
   const initials = `${firstName[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
   return (
     <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-      <span className="text-xs font-semibold text-primary">{initials}</span>
+      <span className="text-xs font-semibold text-primary" aria-hidden>
+        {initials}
+      </span>
     </div>
   );
 }
@@ -52,35 +34,52 @@ function LeadAvatar({ firstName, lastName }: { firstName: string; lastName?: str
 export default function LeadsTable() {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
-  const [bucketId, setBucketId] = useState<string | null>(null);
+  const { bucketId, selectBucket } = useBucketFilter();
+  // In the URL so the dashboard's "Replies received" card can link straight to
+  // the filtered list, and so a filtered view survives a reload.
+  const [statusFilter, setStatusFilter] = useQueryFilter("status");
 
   const { data: leads = [], isLoading } = useGetLeads({ bucketId: bucketId ?? undefined });
   const generateMessage = useGenerateMessage();
 
+  const normalizedSearch = search.trim().toLowerCase();
+  const activeStatus = statusFilter ?? "all";
+
   const filtered = leads.filter((lead) => {
     const matchesSearch =
-      !search ||
-      `${lead.firstName} ${lead.lastName ?? ""}`.toLowerCase().includes(search.toLowerCase()) ||
-      lead.company.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || lead.status === statusFilter;
+      !normalizedSearch ||
+      `${lead.firstName} ${lead.lastName ?? ""}`.toLowerCase().includes(normalizedSearch) ||
+      lead.company.toLowerCase().includes(normalizedSearch);
+    const matchesStatus = activeStatus === "all" || lead.status === activeStatus;
     return matchesSearch && matchesStatus;
   });
+
+  const hasActiveFilters = Boolean(normalizedSearch) || activeStatus !== "all";
+  const isFilteredEmpty = leads.length > 0 && filtered.length === 0;
+
+  function clearFilters() {
+    setSearch("");
+    setStatusFilter(null);
+  }
 
   async function handleGenerateMessage(leadId: string) {
     // No template named on purpose — the server picks one from the lead's bucket,
     // so a supplier gets a purchasing enquiry rather than a job application.
-    await generateMessage.mutateAsync({ leadId });
-    router.push("/messages");
+    // The hook toasts on failure; catching here stops a rejected mutation
+    // becoming an unhandled rejection and navigating anyway.
+    try {
+      await generateMessage.mutateAsync({ leadId });
+      router.push("/messages");
+    } catch {
+      // Already surfaced by the mutation's own error handler.
+    }
   }
 
   return (
     <div className="space-y-6">
-      <BucketBar selectedBucketId={bucketId} onSelect={setBucketId} countBy="leads" />
-
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold">Leads</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {bucketId
@@ -95,37 +94,78 @@ export default function LeadsTable() {
         </div>
       </div>
 
+      <BucketBar selectedBucketId={bucketId} onSelect={selectBucket} countBy="leads" />
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or company…"
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+            aria-hidden
           />
+          <Input
+            type="search"
+            aria-label="Search leads by name or company"
+            placeholder="Search by name or company…"
+            className="pl-9 pr-9"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as LeadStatus | "all")}>
-          <SelectTrigger className="w-full sm:w-44">
+        <Select
+          value={activeStatus}
+          onValueChange={(value) => setStatusFilter(value === "all" ? null : value)}
+        >
+          <SelectTrigger className="w-full sm:w-44" aria-label="Filter by status">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
+            {LEAD_STATUS_ORDER.map((status) => (
+              <SelectItem key={status} value={status}>
+                {LEAD_STATUS_DISPLAY[status].label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      <p className="text-sm text-muted-foreground -mt-2">
+      <p className="text-sm text-muted-foreground -mt-2" aria-live="polite">
         {filtered.length} lead{filtered.length !== 1 ? "s" : ""}
+        {hasActiveFilters && ` of ${leads.length}`}
       </p>
 
       {isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-14 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : isFilteredEmpty ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+          <div className="rounded-full bg-muted p-4">
+            <SearchX className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">No leads match these filters</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {leads.length} contact{leads.length === 1 ? " is" : "s are"} hidden by your search
+              or status filter.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={clearFilters}>
+            Clear filters
+          </Button>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
@@ -157,66 +197,75 @@ export default function LeadsTable() {
                 <TableHead>Title</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Last Contact</TableHead>
-                <TableHead className="text-right w-[80px]">Actions</TableHead>
+                <TableHead>Last contact</TableHead>
+                <TableHead className="text-right w-[96px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((lead) => (
-                <TableRow key={lead.id} className="group">
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <LeadAvatar firstName={lead.firstName} lastName={lead.lastName} />
-                      <span className="font-medium text-sm">
-                        {lead.firstName} {lead.lastName ?? ""}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-40 truncate">
-                    {lead.title ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">{lead.company}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${STATUS_COLORS[lead.status ?? "not_contacted"]}`}
-                    >
-                      {STATUS_LABELS[lead.status ?? "not_contacted"]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatRelativeDate(lead.lastContactedAt)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleGenerateMessage(lead.id)}
-                        disabled={generateMessage.isPending && generateMessage.variables?.leadId === lead.id}
-                        title="Generate message"
-                      >
-                        {generateMessage.isPending && generateMessage.variables?.leadId === lead.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <MessageSquarePlus className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      {lead.linkedinUrl && (
-                        <a
-                          href={lead.linkedinUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={buttonVariants({ size: "sm", variant: "ghost" })}
-                          title="View on LinkedIn"
+              {filtered.map((lead) => {
+                const status = getLeadStatusDisplay(lead.status);
+                const leadName = `${lead.firstName} ${lead.lastName ?? ""}`.trim();
+                const isGenerating =
+                  generateMessage.isPending && generateMessage.variables?.leadId === lead.id;
+
+                return (
+                  <TableRow key={lead.id} className="group">
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <LeadAvatar firstName={lead.firstName} lastName={lead.lastName} />
+                        <span className="font-medium text-sm">{leadName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-40 truncate">
+                      {lead.title ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">{lead.company}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`text-xs ${status.badge}`}>
+                        {status.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatRelativeDate(lead.lastContactedAt)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {/* Was opacity-0 until hover, which meant these controls did
+                          not exist on a touch screen and could be tabbed to while
+                          invisible. Dimmed and always present instead: full
+                          strength on hover, on keyboard focus, or on any device
+                          that can't hover at all. */}
+                      <div className="flex items-center justify-end gap-1 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => handleGenerateMessage(lead.id)}
+                          disabled={isGenerating}
+                          aria-label={`Generate a message to ${leadName}`}
+                          title="Generate message"
                         >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                          {isGenerating ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                        </Button>
+                        {lead.linkedinUrl && (
+                          <a
+                            href={lead.linkedinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={buttonVariants({ size: "icon-sm", variant: "ghost" })}
+                            aria-label={`Open ${leadName}'s LinkedIn profile in a new tab`}
+                            title="View on LinkedIn"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                          </a>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

@@ -57,9 +57,19 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        {/* Follows the OS until the user picks a side, then remembers the pick.
+            It was hard-wired to dark, so someone on a light desktop got a dark
+            app with no hint that the toggle in the header would fix it.
+            disableTransitionOnChange stops every coloured surface animating at
+            once on the switch, which reads as a glitch rather than a fade. */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
           {children}
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-right" closeButton />
         </ThemeProvider>
       </QueryClientProvider>
     </trpc.Provider>

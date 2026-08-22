@@ -4,6 +4,14 @@ import { useState } from "react";
 import { Check, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Save, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useGetCredentialStatuses } from "@/hooks/credentials/useGetCredentialStatuses";
@@ -68,16 +76,27 @@ function CredentialCard({ source, isConfigured, maskedValues }: CredentialCardPr
   const [isEditing, setIsEditing] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
   const [revealedFields, setRevealedFields] = useState<Record<string, boolean>>({});
+  const [isConfirmingRemoval, setIsConfirmingRemoval] = useState(false);
 
   const saveCredentials = useSaveCredentials();
   const removeCredentials = useRemoveCredentials();
 
   async function handleSave() {
-    await saveCredentials.mutateAsync({ source: source.id, credentials: values }).catch(
-      () => undefined,
-    );
-    setValues({});
-    setIsEditing(false);
+    try {
+      await saveCredentials.mutateAsync({ source: source.id, credentials: values });
+      // Only on success. Clearing regardless meant a rejected save — a malformed
+      // key, a network blip — wiped a secret the user had just pasted in from
+      // somewhere else, with nothing left on screen to retry from.
+      setValues({});
+      setIsEditing(false);
+    } catch {
+      // The mutation reports the reason; the fields keep what was typed.
+    }
+  }
+
+  function handleRemove() {
+    removeCredentials.mutate({ source: source.id });
+    setIsConfirmingRemoval(false);
   }
 
   return (
@@ -108,11 +127,21 @@ function CredentialCard({ source, isConfigured, maskedValues }: CredentialCardPr
             <Button
               variant="ghost"
               size="icon"
+              // `title` shows on hover and is not dependably announced; this is
+              // the only name the control has.
+              aria-label={`Remove ${source.name} credentials`}
               title={`Remove ${source.name} credentials`}
               disabled={removeCredentials.isPending}
-              onClick={() => removeCredentials.mutate({ source: source.id })}
+              // Asks first, like every other delete in the app. This one has a
+              // sharper edge than most: the stored secret is never sent back to
+              // the browser, so there is nothing here to copy before it goes.
+              onClick={() => setIsConfirmingRemoval(true)}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              {removeCredentials.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              )}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setIsEditing((open) => !open)}>
@@ -163,10 +192,16 @@ function CredentialCard({ source, isConfigured, maskedValues }: CredentialCardPr
                           [field.key]: !isRevealed,
                         }))
                       }
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      aria-label={`${isRevealed ? "Hide" : "Show"} ${field.label}`}
+                      aria-pressed={isRevealed}
                       title={isRevealed ? "Hide" : "Show"}
                     >
-                      {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {isRevealed ? (
+                        <EyeOff className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <Eye className="h-4 w-4" aria-hidden />
+                      )}
                     </button>
                   )}
                 </div>
@@ -199,6 +234,53 @@ function CredentialCard({ source, isConfigured, maskedValues }: CredentialCardPr
           </div>
         </div>
       )}
+
+      <Dialog
+        open={isConfirmingRemoval}
+        onOpenChange={(isOpen) => !isOpen && setIsConfirmingRemoval(false)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove the {source.name} key?</DialogTitle>
+            <DialogDescription>
+              {source.name} stops being scraped until you add a key again.
+            </DialogDescription>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground">
+            {/* The masked preview on the card is all the browser ever receives,
+                so there is no copy of the secret to fall back on here. */}
+            The key itself is never sent to this page — only the masked preview
+            above. You&apos;ll need the original from{" "}
+            {source.signupUrl ? (
+              <a
+                href={source.signupUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4 hover:no-underline"
+              >
+                {source.name}
+              </a>
+            ) : (
+              source.name
+            )}{" "}
+            to reconnect. Jobs already found from this source are kept.
+          </p>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsConfirmingRemoval(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={removeCredentials.isPending}
+              onClick={handleRemove}
+            >
+              Remove key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

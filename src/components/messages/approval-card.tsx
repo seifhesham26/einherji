@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Check, RefreshCw, SkipForward, Keyboard } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, Check, RefreshCw, SkipForward } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
   const generateMessage = useGenerateMessage();
 
   const isEdited = body !== item.message.body;
-
   const isBusy = approveMessage.isPending || generateMessage.isPending;
 
   // Written before the two business templates existed, or by a build that didn't
@@ -33,11 +32,16 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
     : "Hiring manager";
 
   async function handleApprove() {
-    await approveMessage.mutateAsync({
-      messageId: item.message.id,
-      editedBody: isEdited ? body : undefined,
-    });
-    onNext();
+    try {
+      await approveMessage.mutateAsync({
+        messageId: item.message.id,
+        editedBody: isEdited ? body : undefined,
+      });
+      onNext();
+    } catch {
+      // The mutation toasts; staying on the card lets the user retry rather than
+      // advancing past a draft that was never actually approved.
+    }
   }
 
   async function handleRegenerate() {
@@ -45,35 +49,68 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
     // Reuse whatever this draft was written as. Passing nothing would let the
     // server re-derive it from the bucket, which is right for a first draft but
     // would silently switch template under someone regenerating a deliberate one.
-    await generateMessage.mutateAsync({
-      leadId: item.lead.id,
-      template: templateUsed ?? undefined,
-    });
-    onNext();
+    try {
+      await generateMessage.mutateAsync({
+        leadId: item.lead.id,
+        template: templateUsed ?? undefined,
+      });
+      onNext();
+    } catch {
+      // Same reasoning as approve: don't advance past work that didn't happen.
+    }
   }
+
+  // Reviewing a queue is a repetitive two-second decision per card, and reaching
+  // for the mouse each time is most of the cost. The footer already advertised
+  // shortcuts with a keyboard icon; there were none. Held off while focus is in
+  // the textarea, where every letter is text the user is typing.
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isBusy || event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "TEXTAREA" || target?.tagName === "INPUT") return;
+
+      if (event.key === "a" || event.key === "A") {
+        event.preventDefault();
+        void handleApprove();
+      } else if (event.key === "r" || event.key === "R") {
+        event.preventDefault();
+        void handleRegenerate();
+      } else if (event.key === "s" || event.key === "S") {
+        event.preventDefault();
+        onNext();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  });
 
   return (
     <Card className="w-full max-w-2xl rounded-xl shadow-sm">
       <CardHeader className="pb-3 border-b border-border">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-sm font-semibold text-primary">
+              <span className="text-sm font-semibold text-primary" aria-hidden>
                 {(item.lead?.firstName?.[0] ?? "?").toUpperCase()}
               </span>
             </div>
-            <div>
-              <p className="font-semibold text-sm">
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate">
                 {item.lead?.firstName} {item.lead?.lastName ?? ""}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground truncate">
                 {item.lead?.title ?? "—"} · {item.lead?.company}
               </p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5 shrink-0">
             {item.job && (
-              <Badge variant="outline" className="text-xs">{item.job.title}</Badge>
+              <Badge variant="outline" className="text-xs max-w-[14rem] truncate">
+                {item.job.title}
+              </Badge>
             )}
             <Badge variant="secondary" className="text-xs">
               {templateLabel}
@@ -83,25 +120,40 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
       </CardHeader>
 
       <CardContent className="pt-4">
+        <label htmlFor="message-body" className="sr-only">
+          Message to {item.lead?.firstName ?? "this contact"}
+        </label>
         <Textarea
+          id="message-body"
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(event) => setBody(event.target.value)}
           rows={9}
-          className="resize-none font-mono text-sm bg-muted/30"
+          className="resize-y font-mono text-sm bg-muted/30"
           placeholder="Message content…"
         />
-        {isEdited && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
-            Edited — will be saved as your version
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          {isEdited ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center gap-1">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden />
+              Edited — will be saved as your version
+            </p>
+          ) : (
+            <span />
+          )}
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {body.length} characters
           </p>
-        )}
+        </div>
       </CardContent>
 
       <CardFooter className="gap-2 flex-wrap border-t border-border pt-3">
         <Button onClick={handleApprove} disabled={isBusy} className="gap-2">
-          {approveMessage.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          {isEdited ? "Edit & Approve" : "Approve"}
+          {approveMessage.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
+          {isEdited ? "Edit & approve" : "Approve"}
         </Button>
         <Button variant="outline" onClick={handleRegenerate} disabled={isBusy} className="gap-2">
           {generateMessage.isPending ? (
@@ -115,11 +167,26 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
           <SkipForward className="h-4 w-4" />
           Skip
         </Button>
-        <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hidden sm:flex">
-          <Keyboard className="h-3 w-3" />
-          <span>Edit directly in the box above</span>
+
+        {/* Was `hidden sm:flex` alongside `flex` — two display utilities in one
+            class list, resolved by stylesheet order rather than intent. */}
+        <div className="ml-auto hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+          <Shortcut keyLabel="A" action="approve" />
+          <Shortcut keyLabel="R" action="regenerate" />
+          <Shortcut keyLabel="S" action="skip" />
         </div>
       </CardFooter>
     </Card>
+  );
+}
+
+function Shortcut({ keyLabel, action }: { keyLabel: string; action: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium">
+        {keyLabel}
+      </kbd>
+      {action}
+    </span>
   );
 }

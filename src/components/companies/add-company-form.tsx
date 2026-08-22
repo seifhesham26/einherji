@@ -18,8 +18,15 @@ export default function AddCompanyForm() {
   });
 
   async function handleAdd(companyData: AddCompanyInput) {
-    await addCompany.mutateAsync(companyData).catch(() => undefined);
-    form.reset({ name: "", careersUrl: "" });
+    try {
+      await addCompany.mutateAsync(companyData);
+      // Only on success. Clearing regardless meant a duplicate name or a network
+      // blip threw away what had just been typed, with a toast as the only clue.
+      form.reset({ name: "", careersUrl: "" });
+    } catch {
+      // The mutation surfaces the reason; the form keeps its values so the user
+      // can fix the name and submit again.
+    }
   }
 
   return (

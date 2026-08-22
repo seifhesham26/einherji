@@ -87,25 +87,40 @@ export default function CriteriaForm() {
   function handleCvExtracted(data: ExtractedCvData) {
     if (data.skills.length > 0) {
       const merged = [...new Set([...(form.getValues("skills") ?? []), ...data.skills])];
-      form.setValue("skills", merged);
+      form.setValue("skills", merged, { shouldDirty: true });
     }
     if (data.suggestedTitles.length > 0) {
       const merged = [...new Set([...(form.getValues("titles") ?? []), ...data.suggestedTitles])];
-      form.setValue("titles", merged);
+      form.setValue("titles", merged, { shouldDirty: true });
     }
-    if (data.elevatorPitch) form.setValue("elevatorPitch", data.elevatorPitch);
-    if (data.resumeText) form.setValue("resumeText", data.resumeText);
+    if (data.elevatorPitch) form.setValue("elevatorPitch", data.elevatorPitch, { shouldDirty: true });
+    if (data.resumeText) form.setValue("resumeText", data.resumeText, { shouldDirty: true });
   }
 
   const companySizeMin = form.watch("companySizeMin") ?? 1;
   const companySizeMax = form.watch("companySizeMax") ?? 5000;
   const selectedIndustries = form.watch("industries") ?? [];
+  const hasUnsavedChanges = form.formState.isDirty;
+
+  // A tab closed mid-edit took the whole form with it. The browser's own prompt
+  // is the only one that can interrupt that, and it only appears when there is
+  // genuinely something to lose.
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   function toggleIndustry(industry: string) {
     const current = form.getValues("industries") ?? [];
     form.setValue(
       "industries",
-      current.includes(industry) ? current.filter((i) => i !== industry) : [...current, industry]
+      current.includes(industry)
+        ? current.filter((selected) => selected !== industry)
+        : [...current, industry],
+      { shouldDirty: true },
     );
   }
 
@@ -128,14 +143,19 @@ export default function CriteriaForm() {
             Configure the roles, companies, and context used for job scraping and message generation.
           </p>
         </div>
-        <Button type="submit" disabled={saveCriteria.isPending} className="gap-2 shrink-0">
-          {saveCriteria.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
+        <div className="flex items-center gap-3 shrink-0">
+          {hasUnsavedChanges && (
+            <span className="text-xs text-amber-700 dark:text-amber-400">Unsaved changes</span>
           )}
-          Save criteria
-        </Button>
+          <Button type="submit" disabled={saveCriteria.isPending} className="gap-2">
+            {saveCriteria.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Save criteria
+          </Button>
+        </div>
       </div>
 
       {/* ── 2-column grid ────────────────────────────────────────────── */}
@@ -237,8 +257,8 @@ export default function CriteriaForm() {
                   value={[companySizeMin, companySizeMax]}
                   onValueChange={(values) => {
                     const [min, max] = values as number[];
-                    form.setValue("companySizeMin", min);
-                    form.setValue("companySizeMax", max);
+                    form.setValue("companySizeMin", min, { shouldDirty: true });
+                    form.setValue("companySizeMax", max, { shouldDirty: true });
                   }}
                 />
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -358,8 +378,37 @@ export default function CriteriaForm() {
         </div>
       </div>
 
-      {saveCriteria.isSuccess && (
-        <p className="mt-4 text-sm text-muted-foreground text-right">Saved.</p>
+      {/* This form is two full screens tall on a laptop, and the only Save was
+          at the very top — editing the pitch at the bottom meant scrolling back
+          up to keep it. The bar follows you down, and only appears once there is
+          something to save.
+
+          The old confirmation was a permanent "Saved." line pinned under the
+          right column, which stayed on screen for the rest of the session and
+          said nothing the toast hadn't already said. */}
+      {hasUnsavedChanges && (
+        <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+          <p className="text-sm text-muted-foreground">You have unsaved changes.</p>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={saveCriteria.isPending}
+              onClick={() => form.reset()}
+            >
+              Discard
+            </Button>
+            <Button type="submit" size="sm" disabled={saveCriteria.isPending} className="gap-2">
+              {saveCriteria.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              Save criteria
+            </Button>
+          </div>
+        </div>
       )}
     </form>
   );

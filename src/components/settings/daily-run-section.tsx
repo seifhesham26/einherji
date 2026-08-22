@@ -102,7 +102,15 @@ export default function DailyRunSection() {
                 size="sm"
                 variant={channels.includes(channel) ? "default" : "outline"}
                 className="gap-2 capitalize"
+                // A filled button and an outlined one look different; without
+                // this they sound identical.
+                aria-pressed={channels.includes(channel)}
                 disabled={updateDigest.isPending || (channel === "telegram" && !isTelegramConnected)}
+                title={
+                  channel === "telegram" && !isTelegramConnected
+                    ? "Connect Telegram below to send the digest there"
+                    : undefined
+                }
                 onClick={() => toggleChannel(channel)}
               >
                 {channels.includes(channel) && <Check className="h-3.5 w-3.5" />}

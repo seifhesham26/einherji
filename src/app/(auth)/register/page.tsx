@@ -10,7 +10,7 @@ const FEATURES = [
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen grid lg:grid-cols-[1fr_1fr]">
+    <div className="min-h-dvh grid lg:grid-cols-[1fr_1fr]">
       {/* ── Left branding panel ── */}
       <div className="hidden lg:flex flex-col justify-between bg-[#080808] p-12 relative overflow-hidden">
         <div

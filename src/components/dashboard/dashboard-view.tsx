@@ -1,16 +1,16 @@
 "use client";
 
-import { Loader2, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useSession } from "@/lib/auth-client";
 import StatsOverview from "./stats-overview";
 import ApprovalQueueSummary from "./approval-queue-summary";
 import FollowUpReminders from "./follow-up-reminders";
 import ActivityFeed from "./activity-feed";
+import ScrapeButton from "@/components/scraping/scrape-button";
+import ScrapeRunPanel from "@/components/scraping/scrape-run-panel";
 import { useScrapeJobs } from "@/hooks/jobs/useScrapeJobs";
+import { useIsHydrated } from "@/hooks/useIsHydrated";
+import { useSession } from "@/lib/auth-client";
 
-function getGreeting() {
-  const hour = new Date().getHours();
+function getGreeting(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
@@ -20,37 +20,34 @@ export default function DashboardView() {
   const scrapeJobs = useScrapeJobs();
   const { data: session } = useSession();
 
+  // The server renders this too, and its clock is UTC. Reading the hour during
+  // render made the server say "Good evening" and the browser "Good afternoon"
+  // — a hydration mismatch React logs and then patches over. Held back until
+  // hydration, where the only clock that matters is the user's.
+  const isHydrated = useIsHydrated();
+  const greeting = isHydrated ? getGreeting(new Date().getHours()) : null;
+
   const firstName = session?.user.name?.split(" ")[0] ?? "";
 
   return (
     <div className="space-y-6">
       {/* Top bar */}
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold">
-            {getGreeting()}{firstName ? `, ${firstName}` : ""}
+            {/* Non-breaking space holds the line's height before the greeting
+                resolves, so the page doesn't shift a row on mount. */}
+            {greeting ? `${greeting}${firstName ? `, ${firstName}` : ""}` : " "}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Here&apos;s your job hunt overview.</p>
         </div>
-        <Button
-          size="sm"
-          onClick={() => scrapeJobs.mutate({})}
-          disabled={scrapeJobs.isPending}
-          className="gap-2 shrink-0"
-        >
-          {scrapeJobs.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-          {scrapeJobs.isPending ? "Scraping…" : "Run Daily Scrape"}
-        </Button>
+        <ScrapeButton scrape={scrapeJobs} label="Run daily scrape" />
       </div>
 
-      {/* Stats row */}
+      <ScrapeRunPanel isStarting={scrapeJobs.isPending} />
+
       <StatsOverview />
 
-      {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <ApprovalQueueSummary />

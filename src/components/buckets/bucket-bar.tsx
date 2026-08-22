@@ -51,13 +51,25 @@ export default function BucketBar({
 
   const selected = buckets.find((bucket) => bucket.id === selectedBucketId) ?? null;
   const preset = selected ? BUCKET_KIND_PRESETS[selected.kind as BucketKind] : null;
+  const countNoun = countBy === "leads" ? "contact" : "job";
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* One scrolling row rather than a wrapping block. Bucket names are as long
+          as the user makes them ("Paper factory — Cairo & Giza"), and four of
+          those wrapped to three rows that pushed the page content down. */}
+      <div
+        role="group"
+        aria-label="Filter by bucket"
+        className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 scrollbar-thin"
+      >
         <Button
           size="sm"
           variant={selectedBucketId === null ? "default" : "outline"}
+          // These are filter states, not commands. Announcing which one is on is
+          // the only way the selection exists for a screen reader — the visual
+          // cue is a filled background.
+          aria-pressed={selectedBucketId === null}
           onClick={() => onSelect(null)}
         >
           All
@@ -71,19 +83,30 @@ export default function BucketBar({
               key={bucket.id}
               size="sm"
               variant={bucket.id === selectedBucketId ? "default" : "outline"}
+              aria-pressed={bucket.id === selectedBucketId}
               onClick={() => onSelect(bucket.id)}
               className="gap-2"
             >
-              {bucket.name}
+              <span className="max-w-[14rem] truncate">{bucket.name}</span>
               <Badge variant="secondary" className="text-[10px] tabular-nums">
                 {count}
+                <span className="sr-only">
+                  {" "}
+                  {countNoun}
+                  {count === 1 ? "" : "s"}
+                </span>
               </Badge>
             </Button>
           );
         })}
 
-        <Button size="sm" variant="ghost" className="gap-2" onClick={() => setIsCreating(true)}>
-          <Plus className="h-4 w-4" />
+        <Button
+          size="sm"
+          variant="ghost"
+          className="gap-2 shrink-0"
+          onClick={() => setIsCreating(true)}
+        >
+          <Plus className="h-4 w-4" aria-hidden />
           New bucket
         </Button>
       </div>
