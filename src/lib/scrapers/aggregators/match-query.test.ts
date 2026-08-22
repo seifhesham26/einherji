@@ -135,3 +135,58 @@ describe("matchesQuery", () => {
     expect(matchesQuery(buildJob(), { titles: [], locations: [] })).toBe(true);
   });
 });
+
+// Regression: "remote" was a wildcard on both sides. The paper factory bucket
+// asks for Cairo and Giza because that is where the paper can be delivered, and
+// it filled up with remote software roles from every board it was pointed at.
+describe("matchesQuery — location", () => {
+  it("rejects a remote job when the search only named physical places", () => {
+    const job = buildJob({ title: "Engineering Manager", location: "Remote", isRemote: true });
+    expect(matchesQuery(job, { titles: [], locations: ["Cairo", "Giza"] })).toBe(false);
+  });
+
+  it("rejects a remote job that carries no location at all", () => {
+    // Unlabelled jobs pass the filter, but a job flagged remote isn't unlabelled.
+    const job = buildJob({ title: "Engineering Manager", location: null, isRemote: true });
+    expect(matchesQuery(job, { titles: [], locations: ["Cairo"] })).toBe(false);
+  });
+
+  it("accepts a remote job when the search asked for remote", () => {
+    const job = buildJob({ location: "Remote", isRemote: true });
+    expect(matchesQuery(job, { titles: [], locations: ["Remote", "Cairo"] })).toBe(true);
+  });
+
+  it("accepts a remote job that names a place the search asked for", () => {
+    // "Remote — Cairo" is a Cairo result even for a search that never said remote.
+    const job = buildJob({ location: "Remote — Cairo, Egypt", isRemote: true });
+    expect(matchesQuery(job, { titles: [], locations: ["Cairo"] })).toBe(true);
+  });
+
+  it("rejects an onsite job elsewhere even when the search accepts remote", () => {
+    // Listing "Remote" used to make the whole location filter a no-op, so a
+    // Berlin-only role counted as a match for someone who can't move to Berlin.
+    const job = buildJob({ location: "Berlin, Germany", isRemote: false });
+    expect(matchesQuery(job, { titles: [], locations: ["Remote", "Cairo"] })).toBe(false);
+  });
+
+  it("still lets an unlabelled non-remote job through", () => {
+    const job = buildJob({ location: null, isRemote: false });
+    expect(matchesQuery(job, { titles: [], locations: ["Cairo"] })).toBe(true);
+  });
+
+  it("keeps the paper factory bucket clear of remote software roles", () => {
+    const paperFactory = {
+      titles: ["engineering consultant", "architecture", "contractor", "مقاولات"],
+      locations: ["Cairo", "Giza", "القاهرة", "الجيزة"],
+    };
+
+    const remoteSoftwareJob = buildJob({
+      title: "Senior Software Engineer",
+      tags: ["engineering", "backend"],
+      location: "Remote",
+      isRemote: true,
+    });
+
+    expect(matchesQuery(remoteSoftwareJob, paperFactory)).toBe(false);
+  });
+});

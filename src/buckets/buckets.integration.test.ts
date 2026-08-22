@@ -122,4 +122,84 @@ describeIntegration("buckets (live, writes to db)", () => {
     await removeBucket(db, userId, bucket.id);
     expect(await db.select().from(jobs).where(eq(jobs.bucketId, bucket.id))).toHaveLength(0);
   }, 60_000);
+
+  // Regression: the insert was ON CONFLICT DO NOTHING, so bucket_id was decided
+  // at first insert and never again. Jobs scraped before buckets existed, or
+  // from the dashboard's unfiltered button, were stranded outside every bucket.
+  it("adopts an unfiled job into the bucket that later finds it", async () => {
+    const { db } = await import("@/lib/db");
+    const { jobs } = await import("@/lib/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { createBucket } = await import("./buckets.service");
+    const { insertJobs } = await import("@/jobs/jobs.db");
+
+    const sourceJobId = `adopt-job-${Date.now()}`;
+    const scraped = {
+      sourceJobId,
+      source: "remoteok" as const,
+      title: "Test",
+      company: "Test Co",
+      jobUrl: "https://example.com/j",
+      companyUrl: null, location: null, salary: null, description: null,
+      postedAt: null, workType: "unknown" as const, isRemote: null, tags: null,
+      attributionText: null, attributionUrl: null,
+    };
+
+    // First run has no bucket — this is the dashboard button.
+    const [unfiled] = await insertJobs(db, userId, [scraped]);
+    expect(unfiled.bucketId).toBeNull();
+
+    const bucket = await createBucket(db, userId, {
+      name: `Adopting ${Date.now()}`,
+      kind: "custom",
+      keywords: ["x"],
+      locations: [],
+      sources: [],
+    });
+
+    // Second run finds the same job under a bucket. Nothing is newly inserted —
+    // the run must not report it as a find — but the job is now filed.
+    const inserted = await insertJobs(db, userId, [scraped], bucket.id);
+    expect(inserted).toHaveLength(0);
+
+    const [adopted] = await db.select().from(jobs).where(eq(jobs.id, unfiled.id));
+    expect(adopted.bucketId).toBe(bucket.id);
+  }, 60_000);
+
+  // The other half of the same rule: filing is a one-way door. A job found by
+  // two hunts stays with the one that found it first, rather than flipping
+  // buckets on every scrape.
+  it("does not move a job that already belongs to a bucket", async () => {
+    const { db } = await import("@/lib/db");
+    const { jobs } = await import("@/lib/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const { createBucket } = await import("./buckets.service");
+    const { insertJobs } = await import("@/jobs/jobs.db");
+
+    const [first, second] = await Promise.all([
+      createBucket(db, userId, {
+        name: `First ${Date.now()}`, kind: "custom", keywords: ["x"], locations: [], sources: [],
+      }),
+      createBucket(db, userId, {
+        name: `Second ${Date.now()}`, kind: "custom", keywords: ["x"], locations: [], sources: [],
+      }),
+    ]);
+
+    const scraped = {
+      sourceJobId: `stay-job-${Date.now()}`,
+      source: "remoteok" as const,
+      title: "Test",
+      company: "Test Co",
+      jobUrl: "https://example.com/j",
+      companyUrl: null, location: null, salary: null, description: null,
+      postedAt: null, workType: "unknown" as const, isRemote: null, tags: null,
+      attributionText: null, attributionUrl: null,
+    };
+
+    const [filed] = await insertJobs(db, userId, [scraped], first.id);
+    await insertJobs(db, userId, [scraped], second.id);
+
+    const [unchanged] = await db.select().from(jobs).where(eq(jobs.id, filed.id));
+    expect(unchanged.bucketId).toBe(first.id);
+  }, 60_000);
 });

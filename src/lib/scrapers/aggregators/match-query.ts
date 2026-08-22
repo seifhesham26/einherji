@@ -34,22 +34,52 @@ function matchesTitle(job: ScrapedJob, titles: string[]): boolean {
   });
 }
 
+/**
+ * Whether a job is somewhere the search asked for.
+ *
+ * "Remote" used to be a wildcard on both sides: a remote job satisfied any
+ * filter, and listing "Remote" among the wanted locations satisfied any job. So
+ * the paper factory bucket — Cairo and Giza, because that is where a supplier
+ * can deliver — collected remote software roles from every board, and the job
+ * bucket collected onsite roles in cities its owner can't reach.
+ *
+ * Remote is now a place like any other: it matches when the search asked for it.
+ */
 function matchesLocation(job: ScrapedJob, locations: string[]): boolean {
   if (locations.length === 0) return true;
 
-  // A remote job satisfies any location filter — that's the point of remote.
-  if (job.isRemote) return true;
-  if (!job.location) return true;
+  const wantsRemote = locations.some((location) =>
+    isRemoteText(normalizeForMatch(location)),
+  );
 
-  const jobLocation = normalizeForMatch(job.location);
-  if (REMOTE_LOCATION_HINTS.some((hint) => jobLocation.includes(hint))) return true;
+  const jobLocation = job.location ? normalizeForMatch(job.location) : "";
+  // The flag and the text disagree often enough that both have to count — plenty
+  // of feeds write "Remote" into the location and leave isRemote unset.
+  const jobIsRemote = Boolean(job.isRemote) || isRemoteText(jobLocation);
 
-  return locations.some((location) => {
-    const normalized = normalizeForMatch(location);
-    if (REMOTE_LOCATION_HINTS.some((hint) => normalized.includes(hint))) return true;
-    // Match on the city or country alone, so "Cairo, Egypt" matches "Cairo".
-    return significantWords(location).some((word) => haystackContains(jobLocation, word));
-  });
+  // A remote listing may still name somewhere — "Remote — Cairo" is a Cairo
+  // result for a Cairo search even when the search never mentioned remote.
+  if (jobIsRemote) return wantsRemote || matchesNamedPlace(jobLocation, locations);
+
+  // Genuinely unlabelled, which many sources are. Dropping these would throw
+  // away most of the feed. Sits below the check above on purpose: a job we know
+  // is remote is not a job of unknown location.
+  if (!jobLocation) return true;
+
+  return matchesNamedPlace(jobLocation, locations);
+}
+
+function isRemoteText(normalizedText: string): boolean {
+  return REMOTE_LOCATION_HINTS.some((hint) => normalizedText.includes(hint));
+}
+
+// Match on the city or country alone, so "Cairo, Egypt" matches "Cairo".
+function matchesNamedPlace(jobLocation: string, locations: string[]): boolean {
+  if (!jobLocation) return false;
+
+  return locations.some((location) =>
+    significantWords(location).some((word) => haystackContains(jobLocation, word)),
+  );
 }
 
 function matchesWorkType(job: ScrapedJob, workTypes?: WorkType[]): boolean {

@@ -1,4 +1,4 @@
-import { and, count, eq, desc, sql } from "drizzle-orm";
+import { and, count, eq, desc, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import { dedupeBySourceJobId, type ScrapedJob } from "@/lib/scrapers/job-source.types";
@@ -58,7 +58,7 @@ export async function insertJobs(
   const uniqueJobs = dedupeBySourceJobId(scrapedJobs);
   if (uniqueJobs.length === 0) return [];
 
-  return db
+  const inserted = await db
     .insert(jobs)
     .values(
       uniqueJobs.map((job) => ({
@@ -88,6 +88,57 @@ export async function insertJobs(
       target: [jobs.userId, jobs.source, jobs.sourceJobId],
     })
     .returning();
+
+  // Anything this run re-found rather than inserted. Deliberately a second
+  // statement: the insert must keep returning only genuinely new rows, because
+  // every caller reads its length as "new jobs found" and reports it as such.
+  if (bucketId && inserted.length < uniqueJobs.length) {
+    await adoptUnfiledJobs(db, userId, uniqueJobs, bucketId);
+  }
+
+  return inserted;
+}
+
+/**
+ * Files jobs that already exist but belong to no bucket.
+ *
+ * The insert above never rewrites an existing row, which is right for the job
+ * data itself and was wrong for bucket_id: it got decided at first insert and
+ * never again. Everything scraped before buckets existed, and everything from
+ * the dashboard's unfiltered button, sat at NULL and could never reach a bucket
+ * no matter how often the right search re-found it.
+ *
+ * `isNull(bucketId)` is what keeps filing a one-way door — a job already filed
+ * under one hunt does not move because a second search turned it up too.
+ */
+async function adoptUnfiledJobs(
+  db: Database,
+  userId: string,
+  scrapedJobs: ScrapedJob[],
+  bucketId: string,
+) {
+  // sourceJobId is only unique within a source, so the ids have to be matched
+  // per source — the same number can mean a Greenhouse job and a LinkedIn one.
+  const idsBySource = new Map<ScrapedJob["source"], string[]>();
+  for (const job of scrapedJobs) {
+    const ids = idsBySource.get(job.source) ?? [];
+    ids.push(job.sourceJobId);
+    idsBySource.set(job.source, ids);
+  }
+
+  for (const [source, sourceJobIds] of idsBySource) {
+    await db
+      .update(jobs)
+      .set({ bucketId })
+      .where(
+        and(
+          eq(jobs.userId, userId),
+          eq(jobs.source, source),
+          inArray(jobs.sourceJobId, sourceJobIds),
+          isNull(jobs.bucketId),
+        ),
+      );
+  }
 }
 
 // Clears a user's jobs from one source — used when they turn a source off, and to
