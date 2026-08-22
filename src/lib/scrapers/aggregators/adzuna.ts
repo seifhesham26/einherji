@@ -1,18 +1,22 @@
 import { z } from "zod";
 import { fetchJson } from "../http/fetch-with-retry";
 import { atsRateLimiter } from "../http/rate-limiter";
+import { CircuitOpenError } from "../http/scrape-error";
 import { parseArrayLeniently, parseScrapedJob, type JobSearchQuery, type ScrapedJob } from "../job-source.types";
 import { detectIsRemote, normalizeWorkType } from "../normalize-work-type";
 import { matchesQuery } from "./match-query";
 
 const ADZUNA_API_URL = "https://api.adzuna.com/v1/api/jobs";
 const RESULTS_PER_PAGE = 50;
-const DEFAULT_COUNTRY = "gb";
+// Where a search names no country of its own — remote-only, or no location at
+// all — Adzuna still needs one in the path. The US index is the largest, so it's
+// the least arbitrary place to point an unscoped search.
+const DEFAULT_COUNTRY = "us";
 
 // Adzuna is country-scoped, and the code is part of the path rather than a
 // parameter. Mapping the user's stated locations onto it beats hardcoding.
 const COUNTRY_KEYWORDS: { code: string; keywords: string[] }[] = [
-  { code: "us", keywords: ["united states", "usa", "us", "america", "new york", "san francisco", "remote"] },
+  { code: "us", keywords: ["united states", "usa", "us", "america", "new york", "san francisco"] },
   { code: "gb", keywords: ["united kingdom", "uk", "england", "london", "scotland"] },
   { code: "de", keywords: ["germany", "berlin", "munich", "deutschland"] },
   { code: "ca", keywords: ["canada", "toronto", "vancouver"] },
@@ -23,6 +27,8 @@ const COUNTRY_KEYWORDS: { code: string; keywords: string[] }[] = [
   { code: "pl", keywords: ["poland", "warsaw"] },
   { code: "za", keywords: ["south africa", "cape town", "johannesburg"] },
 ];
+
+const SUPPORTED_COUNTRY_CODES = COUNTRY_KEYWORDS.map(({ code }) => code);
 
 const adzunaJobSchema = z.object({
   id: z.string(),
@@ -51,8 +57,23 @@ export async function fetchAdzunaJobs(
   query: JobSearchQuery,
   signal?: AbortSignal,
 ): Promise<ScrapedJob[]> {
-  const country = resolveCountry(query.locations);
+  const searchableLocations = query.locations.filter((candidate) => !isRemoteKeyword(candidate));
+  const match = resolveCountry(query.locations);
+
+  // Adzuna resolves `where` *inside* the country in the path, so an uncovered
+  // location used to fall back to `gb` and then search the UK index for, say,
+  // "Cairo" — a query that can only ever return zero results. Say so instead.
+  if (!match && searchableLocations.length > 0) {
+    throw new Error(
+      `Adzuna has no index covering ${searchableLocations.join(", ")}. ` +
+        `It supports: ${SUPPORTED_COUNTRY_CODES.join(", ")}. ` +
+        `Drop Adzuna from this search, or add a location it covers.`,
+    );
+  }
+
+  const country = match?.code ?? DEFAULT_COUNTRY;
   const collected: ScrapedJob[] = [];
+  const titleErrors: unknown[] = [];
 
   // Adzuna takes one keyword string per request, so each title is its own call.
   for (const title of query.titles) {
@@ -66,52 +87,75 @@ export async function fetchAdzunaJobs(
       "content-type": "application/json",
     });
 
-    const location = query.locations.find((candidate) => !isRemoteKeyword(candidate));
-    if (location) params.set("where", location);
+    // Only the location that picked the country belongs in `where` — any other
+    // one is by definition outside the index we're querying.
+    if (match && !isRemoteKeyword(match.location)) params.set("where", match.location);
     if (query.salaryMin) params.set("salary_min", String(query.salaryMin));
 
-    const payload = await atsRateLimiter.schedule(() =>
-      fetchJson(`${ADZUNA_API_URL}/${country}/search/1?${params.toString()}`, { signal }),
-    );
+    try {
+      const payload = await atsRateLimiter.schedule(() =>
+        fetchJson(`${ADZUNA_API_URL}/${country}/search/1?${params.toString()}`, { signal }),
+      );
 
-    const parsed = adzunaResponseSchema.safeParse(payload);
-    if (!parsed.success) continue;
+      const parsed = adzunaResponseSchema.safeParse(payload);
+      if (!parsed.success) continue;
 
-    for (const job of parseArrayLeniently(parsed.data.results, adzunaJobSchema)) {
-      const scraped = parseScrapedJob({
-        sourceJobId: job.id,
-        source: "adzuna",
-        title: job.title,
-        company: job.company?.display_name || "Unknown",
-        jobUrl: job.redirect_url,
-        companyUrl: null,
-        location: job.location?.display_name ?? null,
-        salary: formatSalary(job.salary_min, job.salary_max),
-        description: job.description ?? null,
-        postedAt: job.created ?? null,
-        workType: normalizeWorkType(job.contract_time, job.contract_type),
-        isRemote: detectIsRemote(job.location?.display_name, job.title),
-        tags: job.category?.label ? [job.category.label] : null,
-      });
+      for (const job of parseArrayLeniently(parsed.data.results, adzunaJobSchema)) {
+        const scraped = parseScrapedJob({
+          sourceJobId: job.id,
+          source: "adzuna",
+          title: job.title,
+          company: job.company?.display_name || "Unknown",
+          jobUrl: job.redirect_url,
+          companyUrl: null,
+          location: job.location?.display_name ?? null,
+          salary: formatSalary(job.salary_min, job.salary_max),
+          description: job.description ?? null,
+          postedAt: job.created ?? null,
+          workType: normalizeWorkType(job.contract_time, job.contract_type),
+          isRemote: detectIsRemote(job.location?.display_name, job.title),
+          tags: job.category?.label ? [job.category.label] : null,
+        });
 
-      // Adzuna already filtered server-side; this only drops work-type mismatches.
-      if (scraped && matchesQuery(scraped, { ...query, titles: [], locations: [] })) {
-        collected.push(scraped);
+        // Adzuna already filtered server-side; this only drops work-type mismatches.
+        if (scraped && matchesQuery(scraped, { ...query, titles: [], locations: [] })) {
+          collected.push(scraped);
+        }
       }
+    } catch (error) {
+      // Adzuna 5xxs intermittently and the retry layer gives up after three
+      // tries. One keyword losing that coin flip shouldn't throw away the jobs
+      // the other keywords already returned.
+      if (error instanceof CircuitOpenError) throw error;
+      titleErrors.push(error);
     }
   }
+
+  // Nothing came back and something broke — that's a failed source, not an empty
+  // board, and the run summary should say which.
+  if (collected.length === 0 && titleErrors.length > 0) throw titleErrors[0];
 
   return collected;
 }
 
-function resolveCountry(locations: string[]): string {
-  for (const location of locations) {
+interface CountryMatch {
+  code: string;
+  // The location string that selected this country — the only one Adzuna's
+  // `where` can resolve against the country's index.
+  location: string;
+}
+
+function resolveCountry(locations: string[]): CountryMatch | null {
+  // "Remote" names no country, so it must not pick the index — it used to be a
+  // keyword for `us`, which meant ["Remote", "Berlin"] searched the US and
+  // dropped Berlin on the floor.
+  for (const location of locations.filter((candidate) => !isRemoteKeyword(candidate))) {
     const normalized = location.toLowerCase();
     for (const { code, keywords } of COUNTRY_KEYWORDS) {
-      if (keywords.some((keyword) => normalized.includes(keyword))) return code;
+      if (keywords.some((keyword) => normalized.includes(keyword))) return { code, location };
     }
   }
-  return DEFAULT_COUNTRY;
+  return null;
 }
 
 function isRemoteKeyword(location: string): boolean {

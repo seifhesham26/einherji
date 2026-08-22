@@ -13,13 +13,17 @@ import { lookup } from "node:dns/promises";
  * point at 10.0.0.1 while looking perfectly public.
  */
 
+import { redactUrl } from "./redact-url";
+
 export class UnsafeUrlError extends Error {
   readonly url: string;
 
   constructor(url: string, reason: string) {
-    super(`Refusing to fetch ${url}: ${reason}`);
+    // Redacted for the same reason ScrapeError is: this message ends up in the
+    // run history the user can read.
+    super(`Refusing to fetch ${redactUrl(url)}: ${reason}`);
     this.name = "UnsafeUrlError";
-    this.url = url;
+    this.url = redactUrl(url);
   }
 }
 

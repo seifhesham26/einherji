@@ -1,5 +1,6 @@
 import { assertSafeUrl } from "./assert-safe-url";
 import { buildRequestHeaders, type RequestHeaderOptions } from "./build-request-headers";
+import { redactUrl } from "./redact-url";
 import { sleep } from "./rate-limiter";
 import { CircuitOpenError, ScrapeError } from "./scrape-error";
 
@@ -65,7 +66,7 @@ export async function fetchWithRetry(
   let lastStatus = 0;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    if (options.signal?.aborted) throw new ScrapeError("Scrape cancelled", 0, url);
+    if (options.signal?.aborted) throw new ScrapeError("Scrape cancelled", 0, redactUrl(url));
 
     const response = options.requireSafeUrl
       ? await fetchFollowingSafeRedirects(url, options)
@@ -102,13 +103,19 @@ export async function fetchWithRetry(
 
     // 4xx other than 429 won't improve on retry — a 404 from an ATS board just
     // means the company isn't there.
-    throw new ScrapeError(`Request to ${url} failed with ${response.status}`, response.status, url);
+    throw new ScrapeError(
+      `Request to ${redactUrl(url)} failed with ${response.status}`,
+      response.status,
+      redactUrl(url),
+    );
   }
 
+  // The status is the whole diagnosis here — "failed after 3 attempts" alone
+  // can't tell an upstream outage apart from us being throttled.
   throw new ScrapeError(
-    `Request to ${url} failed after ${MAX_ATTEMPTS} attempts`,
+    `Request to ${redactUrl(url)} failed after ${MAX_ATTEMPTS} attempts (last status ${lastStatus})`,
     lastStatus,
-    url,
+    redactUrl(url),
   );
 }
 
@@ -136,7 +143,7 @@ async function fetchFollowingSafeRedirects(
     await assertSafeUrl(currentUrl);
   }
 
-  throw new ScrapeError(`Too many redirects from ${url}`, 0, url);
+  throw new ScrapeError(`Too many redirects from ${redactUrl(url)}`, 0, redactUrl(url));
 }
 
 // Checked from the declared length where there is one. Bodies without a
@@ -145,9 +152,9 @@ function assertWithinSizeLimit(response: Response, url: string): void {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
     throw new ScrapeError(
-      `Response from ${url} is too large (${declaredLength} bytes)`,
+      `Response from ${redactUrl(url)} is too large (${declaredLength} bytes)`,
       response.status,
-      url,
+      redactUrl(url),
     );
   }
 }
@@ -167,7 +174,7 @@ async function readCappedText(response: Response, url: string): Promise<string> 
 
       received += value.byteLength;
       if (received > MAX_RESPONSE_BYTES) {
-        throw new ScrapeError(`Response from ${url} is too large`, response.status, url);
+        throw new ScrapeError(`Response from ${redactUrl(url)} is too large`, response.status, redactUrl(url));
       }
       text += decoder.decode(value, { stream: true });
     }
