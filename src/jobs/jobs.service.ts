@@ -2,13 +2,34 @@ import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
 import { findHiringManagers } from "@/lib/apify/client";
 import { getSettingsByUserId } from "@/settings/settings.db";
-import { getAllJobs, getJobById, markJobProcessed } from "./jobs.db";
+import { deleteAllJobs, deleteJobsByIds, getAllJobs, getJobById, markJobProcessed } from "./jobs.db";
 import { insertLeads } from "@/leads/leads.db";
 import { consumeQuota } from "@/usage/usage.service";
-import type { GetJobsInput } from "./jobs.validators";
+import type { ClearJobsInput, DeleteJobsInput, GetJobsInput } from "./jobs.validators";
 
 export async function fetchJobs(db: Database, userId: string, input: GetJobsInput) {
   return getAllJobs(db, userId, { processed: input.processed, bucketId: input.bucketId });
+}
+
+/**
+ * Removes the jobs the user selected.
+ *
+ * Deleting a job doesn't touch the leads found from it — those are people the
+ * user has already started working, and losing them because the listing was
+ * tidied away would be the destructive surprise. The scraper's dedupe means a
+ * deleted job can come back on the next run, which is the intended escape hatch.
+ */
+export async function removeJobs(db: Database, userId: string, input: DeleteJobsInput) {
+  const deleted = await deleteJobsByIds(db, userId, input.jobIds);
+  return { deletedCount: deleted.length };
+}
+
+export async function clearJobs(db: Database, userId: string, input: ClearJobsInput) {
+  const deleted = await deleteAllJobs(db, userId, {
+    bucketId: input.bucketId,
+    onlyProcessed: input.onlyProcessed,
+  });
+  return { deletedCount: deleted.length };
 }
 
 /**

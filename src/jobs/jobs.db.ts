@@ -155,6 +155,38 @@ export async function deleteJobsBySource(
     .returning({ id: jobs.id });
 }
 
+/**
+ * Deletes specific jobs.
+ *
+ * The userId in the WHERE clause is the authorisation check, not a filter — the
+ * ids come from the client, so without it any id in the table would be fair game.
+ * Returns the rows actually removed so the caller can report a real count rather
+ * than echoing back what was asked for.
+ */
+export async function deleteJobsByIds(db: Database, userId: string, jobIds: string[]) {
+  if (jobIds.length === 0) return [];
+
+  return db
+    .delete(jobs)
+    .where(and(eq(jobs.userId, userId), inArray(jobs.id, jobIds)))
+    .returning({ id: jobs.id });
+}
+
+export async function deleteAllJobs(
+  db: Database,
+  userId: string,
+  filters: { bucketId?: string; onlyProcessed?: boolean } = {},
+) {
+  const conditions = [eq(jobs.userId, userId)];
+  if (filters.bucketId) conditions.push(eq(jobs.bucketId, filters.bucketId));
+  if (filters.onlyProcessed) conditions.push(eq(jobs.isProcessed, true));
+
+  return db
+    .delete(jobs)
+    .where(and(...conditions))
+    .returning({ id: jobs.id });
+}
+
 export async function markJobProcessed(db: Database, userId: string, jobId: string) {
   await db
     .update(jobs)

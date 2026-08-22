@@ -14,12 +14,15 @@ import {
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useFindManagers } from "@/hooks/jobs/useFindManagers";
 import { formatRelativeDate } from "@/utils/format-relative-date";
 import type { Job } from "@/types/job";
 
 interface JobCardProps {
   job: Job;
+  isSelected?: boolean;
+  onSelectedChange?: (isSelected: boolean) => void;
 }
 
 // Short display names — the raw enum values are snake_case and look like internals.
@@ -38,11 +41,13 @@ const SOURCE_LABELS: Record<string, string> = {
   weworkremotely: "WeWorkRemotely",
   hackernews: "Hacker News",
   hackernews_freelance: "HN Freelance",
+  wuzzuf: "Wuzzuf",
   freelancer: "Freelancer.com",
   adzuna: "Adzuna",
   reddit: "Reddit",
   twitter: "X",
-  serpapi: "Search",
+  serpapi: "Google Jobs",
+  google_places: "Google Places",
   linkedin_guest: "LinkedIn",
   apify: "Apify",
 };
@@ -58,16 +63,33 @@ function CompanyAvatar({ name }: { name: string }) {
   );
 }
 
-export default function JobCard({ job }: JobCardProps) {
+export default function JobCard({ job, isSelected = false, onSelectedChange }: JobCardProps) {
   const findManagers = useFindManagers();
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
 
   const isFinding = findManagers.isPending && findManagers.variables?.jobId === job.id;
+  const isSelectable = Boolean(onSelectedChange);
 
   return (
-    <Card className="flex flex-col rounded-xl transition-shadow hover:shadow-md">
+    <Card
+      data-selected={isSelected || undefined}
+      className="flex flex-col rounded-xl transition-all hover:shadow-md data-selected:ring-2 data-selected:ring-primary data-selected:bg-primary/[0.03]"
+    >
       <CardHeader className="pb-3">
-        <div className="flex items-start gap-3">
+        {/* min-w-0 is load-bearing: this is a grid item, and grid items default
+            to min-width:auto, so the flex row below happily overflows the column
+            and the status badge gets clipped by the card's overflow-hidden. */}
+        <div className="flex items-start gap-3 min-w-0">
+          {isSelectable && (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => onSelectedChange?.(checked === true)}
+              // The card is a grid cell with no other label, so the accessible
+              // name has to carry which job this selects.
+              aria-label={`Select ${job.title} at ${job.company}`}
+              className="mt-1"
+            />
+          )}
           <CompanyAvatar name={job.company} />
           <div className="flex-1 min-w-0">
             {/* The title links out. It was plain text with the only way to the
@@ -95,7 +117,7 @@ export default function JobCard({ job }: JobCardProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 pb-3">
+      <CardContent className="flex-1 pb-4">
         <div className="space-y-1.5">
           {job.location && (
             <MetaRow icon={<MapPin className="h-3 w-3 shrink-0" />} label="Location">
@@ -117,7 +139,7 @@ export default function JobCard({ job }: JobCardProps) {
           </MetaRow>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap mt-2.5">
+        <div className="flex items-center gap-1.5 flex-wrap mt-3">
           <Badge variant="secondary" className="text-[10px] font-normal">
             {SOURCE_LABELS[job.source] ?? job.source}
           </Badge>
@@ -127,7 +149,10 @@ export default function JobCard({ job }: JobCardProps) {
             </Badge>
           )}
           {job.isRemote && (
-            <Badge variant="outline" className="text-[10px] font-normal">
+            <Badge
+              variant="outline"
+              className="text-[10px] font-normal bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20"
+            >
               Remote
             </Badge>
           )}
@@ -136,7 +161,7 @@ export default function JobCard({ job }: JobCardProps) {
         {/* Scraped and stored on every job, and never once shown — deciding
             whether a role is worth a manager lookup meant opening the posting. */}
         {job.description && (
-          <div className="mt-2.5">
+          <div className="mt-3">
             <button
               type="button"
               onClick={() => setIsDescriptionOpen((isOpen) => !isOpen)}
@@ -150,7 +175,7 @@ export default function JobCard({ job }: JobCardProps) {
               {isDescriptionOpen ? "Hide description" : "Read description"}
             </button>
             {isDescriptionOpen && (
-              <p className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground">
+              <p className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
                 {job.description}
               </p>
             )}
@@ -164,14 +189,17 @@ export default function JobCard({ job }: JobCardProps) {
             href={job.attributionUrl}
             target="_blank"
             rel="noopener"
-            className="text-[10px] text-muted-foreground hover:text-foreground mt-2 inline-block"
+            className="text-[10px] text-muted-foreground hover:text-foreground mt-3 inline-block"
           >
             {job.attributionText}
           </a>
         )}
       </CardContent>
 
-      <CardFooter className="gap-2 pt-0">
+      {/* No pt-0 here. CardFooter's own p-4 is what separates the buttons from
+          the border above them — overriding it sat "Find manager" flush against
+          the rule, which read as a rendering bug. */}
+      <CardFooter className="gap-2">
         <Button
           size="sm"
           variant={job.isProcessed ? "secondary" : "outline"}
@@ -180,9 +208,9 @@ export default function JobCard({ job }: JobCardProps) {
           onClick={() => findManagers.mutate({ jobId: job.id })}
         >
           {isFinding ? (
-            <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
           ) : (
-            <Users className="h-3 w-3 mr-1.5" />
+            <Users className="h-3.5 w-3.5" aria-hidden />
           )}
           {job.isProcessed ? "Manager found" : "Find manager"}
         </Button>
@@ -195,7 +223,7 @@ export default function JobCard({ job }: JobCardProps) {
           aria-label={`Open the ${job.title} posting at ${job.company} in a new tab`}
           title="Open posting"
         >
-          <ExternalLink className="h-3 w-3" aria-hidden />
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
         </a>
       </CardFooter>
     </Card>

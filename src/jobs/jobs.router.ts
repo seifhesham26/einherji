@@ -1,6 +1,11 @@
 import { createTRPCRouter, protectedProcedure } from "@/server/trpc";
-import { getJobsSchema, findManagersSchema } from "./jobs.validators";
-import { fetchJobs, findAndSaveManagers } from "./jobs.service";
+import {
+  clearJobsSchema,
+  deleteJobsSchema,
+  findManagersSchema,
+  getJobsSchema,
+} from "./jobs.validators";
+import { clearJobs, fetchJobs, findAndSaveManagers, removeJobs } from "./jobs.service";
 import { getJobsStats } from "./jobs.db";
 import { db } from "@/lib/db";
 
@@ -22,5 +27,17 @@ export const jobsRouter = createTRPCRouter({
     .input(findManagersSchema)
     .mutation(async ({ input, ctx }) => {
       return findAndSaveManagers(db, ctx.session.user.id, input.jobId);
+    }),
+
+  deleteMany: protectedProcedure
+    .input(deleteJobsSchema)
+    .mutation(async ({ input, ctx }) => {
+      return removeJobs(db, ctx.session.user.id, input);
+    }),
+
+  clear: protectedProcedure
+    .input(clearJobsSchema)
+    .mutation(async ({ input, ctx }) => {
+      return clearJobs(db, ctx.session.user.id, input);
     }),
 });
