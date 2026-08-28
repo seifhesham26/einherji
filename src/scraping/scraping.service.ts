@@ -5,6 +5,8 @@ import { getResolvedCompanies } from "@/companies/companies.db";
 import { getSettingsByUserId } from "@/settings/settings.db";
 import { resolveCredentials } from "@/credentials/credentials.service";
 import { getExistingSourceJobIds, insertJobs } from "@/jobs/jobs.db";
+import { getMuteRules } from "@/mute-rules/mute-rules.db";
+import { splitMutedJobs } from "@/mute-rules/matches-mute-rule";
 import { fetchAtsJobs, isAtsProvider } from "@/lib/scrapers/ats/fetch-ats-jobs";
 import {
   aggregatorNeedsCredentials,
@@ -48,6 +50,18 @@ const STALE_RUN_AFTER_MS = MAX_RUN_DURATION_MS * 5;
 // Only the first few failures go in the summary; beyond that it's noise.
 const MAX_REPORTED_ERRORS = 3;
 
+/**
+ * The user's mute rules and a running tally of what they silenced.
+ *
+ * Carried through the tasks as one mutable object for the same reason taskErrors
+ * is: each source contributes to a total the run reports once at the end, and
+ * threading a return value back through three call shapes would say less.
+ */
+interface MutingState {
+  rules: { kind: "company" | "title"; pattern: string }[];
+  mutedCount: number;
+}
+
 const DEFAULT_SOURCES: JobSourceName[] = [
   "greenhouse",
   "lever",
@@ -85,10 +99,14 @@ export async function cancelRun(db: Database, userId: string, runId: string) {
 export async function startScrape(db: Database, userId: string, input: StartScrapeInput) {
   await assertNoRunInFlight(db, userId);
 
-  const [activeCriteria, settings, companies] = await Promise.all([
+  const [activeCriteria, settings, companies, savedMuteRules] = await Promise.all([
     getActiveCriteria(db, userId),
     getSettingsByUserId(db, userId),
     getResolvedCompanies(db, userId),
+    // Loaded once for the whole run. Matching happens per scraped job, and a
+    // query per job would be thousands of round trips to answer the same
+    // question with the same answer.
+    getMuteRules(db, userId),
   ]);
 
   // A bucket carries its own search. When one is named it replaces the
@@ -176,6 +194,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
   const abortController = new AbortController();
   const budgetTimer = setTimeout(() => abortController.abort(), MAX_RUN_DURATION_MS);
   const taskErrors: string[] = [];
+  const muting: MutingState = { rules: savedMuteRules, mutedCount: 0 };
   // Sources that ran fine but structurally can't cover this search. Kept apart
   // from taskErrors so a permanent mismatch doesn't read as a broken scraper.
   const taskNotices: string[] = [];
@@ -192,7 +211,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
   try {
     for (const company of companiesInScope) {
       if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
-      await runBoardTask(db, userId, run.id, company, query, bucket?.id ?? null, abortController.signal, taskErrors);
+      await runBoardTask(db, userId, run.id, company, query, bucket?.id ?? null, abortController.signal, taskErrors, muting);
     }
 
     for (const source of aggregatorSources) {
@@ -207,6 +226,7 @@ export async function startScrape(db: Database, userId: string, input: StartScra
         abortController.signal,
         taskErrors,
         taskNotices,
+        muting,
       );
     }
 
@@ -217,14 +237,19 @@ export async function startScrape(db: Database, userId: string, input: StartScra
     if (wantsLinkedIn) {
       if (await wasCancelled()) return getScrapeRunById(db, userId, run.id);
       const existingSourceJobIds = await getExistingSourceJobIds(db, userId, "linkedin_guest");
-      await runLinkedInTask(db, userId, run.id, query, existingSourceJobIds, bucket?.id ?? null, abortController.signal);
+      await runLinkedInTask(db, userId, run.id, query, existingSourceJobIds, bucket?.id ?? null, abortController.signal, muting);
     }
 
     // Hitting the time budget isn't a failure — everything found before the cutoff
     // was persisted. Say so explicitly so the user knows there's more to fetch.
     return finishScrapeRunIfRunning(db, run.id, {
       status: "completed",
-      errorMessage: summariseOutcome(abortController.signal.aborted, taskErrors, taskNotices),
+      errorMessage: summariseOutcome(
+        abortController.signal.aborted,
+        taskErrors,
+        taskNotices,
+        muting.mutedCount,
+      ),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Scrape failed";
@@ -263,6 +288,7 @@ function summariseOutcome(
   hitTimeBudget: boolean,
   taskErrors: string[],
   taskNotices: string[] = [],
+  mutedCount = 0,
 ): string | null {
   const parts: string[] = [];
 
@@ -286,6 +312,12 @@ function summariseOutcome(
     );
   }
 
+  // Said out loud because otherwise a run that found forty postings and wrote
+  // nine looks broken. It was the rules, and the rules were the user's idea.
+  if (mutedCount > 0) {
+    parts.push(`${mutedCount} posting${mutedCount === 1 ? "" : "s"} hidden by your mute rules.`);
+  }
+
   return parts.length > 0 ? parts.join(" ") : null;
 }
 
@@ -302,6 +334,7 @@ async function runBoardTask(
   bucketId: string | null,
   signal: AbortSignal,
   taskErrors: string[],
+  muting: MutingState,
 ) {
   if (signal.aborted || !company.atsProvider || !company.atsSlug) {
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
@@ -318,10 +351,16 @@ async function runBoardTask(
     // always filtered on the user's criteria; boards did not, so tracking one
     // large company buried every other source in noise.
     const relevant = scraped.filter((job) => matchesQuery(job, query));
-    const inserted = await insertJobs(db, userId, relevant, bucketId);
+    const { kept, muted } = splitMutedJobs(relevant, muting.rules);
+    muting.mutedCount += muted.length;
 
+    const inserted = await insertJobs(db, userId, kept, { bucketId, query });
+
+    // Found counts what survived the rules. A muted posting was never a result
+    // the user was offered, and counting it would make every total unreconcilable
+    // with the list it describes.
     await recordTaskProgress(db, runId, {
-      jobsFound: relevant.length,
+      jobsFound: kept.length,
       jobsInserted: inserted.length,
     });
   } catch (error) {
@@ -342,6 +381,7 @@ async function runAggregatorTask(
   signal: AbortSignal,
   taskErrors: string[],
   taskNotices: string[],
+  muting: MutingState,
 ) {
   if (signal.aborted) {
     await recordTaskProgress(db, runId, { jobsFound: 0, jobsInserted: 0 });
@@ -356,10 +396,13 @@ async function runAggregatorTask(
       : null;
 
     const scraped = await fetchAggregatorJobs(source, query, credentials, signal);
-    const inserted = await insertJobs(db, userId, scraped, bucketId);
+    const { kept, muted } = splitMutedJobs(scraped, muting.rules);
+    muting.mutedCount += muted.length;
+
+    const inserted = await insertJobs(db, userId, kept, { bucketId, query });
 
     await recordTaskProgress(db, runId, {
-      jobsFound: scraped.length,
+      jobsFound: kept.length,
       jobsInserted: inserted.length,
     });
   } catch (error) {
@@ -385,6 +428,7 @@ async function runLinkedInTask(
   existingSourceJobIds: Set<string>,
   bucketId: string | null,
   signal: AbortSignal,
+  muting: MutingState,
 ) {
   let found = 0;
   let inserted = 0;
@@ -392,7 +436,14 @@ async function runLinkedInTask(
 
   const flush = async () => {
     if (batch.length === 0) return;
-    const written = await insertJobs(db, userId, batch, bucketId);
+
+    const { kept, muted } = splitMutedJobs(batch, muting.rules);
+    muting.mutedCount += muted.length;
+    // Muted rows were counted into `found` as they streamed in, so they come
+    // back off it here — the alternative is testing every job twice.
+    found -= muted.length;
+
+    const written = await insertJobs(db, userId, kept, { bucketId, query });
     inserted += written.length;
     batch = [];
   };

@@ -20,6 +20,35 @@ const describeIntegration = isEnabled ? describe : describe.skip;
 
 const testUserId = `scrape-test-${Date.now()}`;
 
+/**
+ * Every job the account holds, paged through.
+ *
+ * getJobs returns one page at a time now, and it defaults to the open statuses
+ * and to score order. These assertions are about what the scraper stored, not
+ * about how the list presents it, so this asks for every status explicitly.
+ */
+async function fetchAllJobs(userId: string) {
+  const { db } = await import("@/lib/db");
+  const { getJobs } = await import("@/jobs/jobs.db");
+  const { jobStatusValues } = await import("@/jobs/jobs.validators");
+
+  const collected: Awaited<ReturnType<typeof getJobs>>["jobs"] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await getJobs(db, userId, {
+      statuses: [...jobStatusValues],
+      sort: "newest",
+      limit: 100,
+      cursor,
+    });
+    collected.push(...page.jobs);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+
+  return collected;
+}
+
 beforeAll(async () => {
   if (!isEnabled) return;
   const { db } = await import("@/lib/db");
@@ -61,7 +90,6 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
       "@/companies/companies.service"
     );
     const { startScrape } = await import("./scraping.service");
-    const { getAllJobs } = await import("@/jobs/jobs.db");
 
     const userId = testUserId;
 
@@ -78,7 +106,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
       expect(run!.tasksCompleted).toBe(run!.tasksTotal);
       expect(run!.jobsFound).toBeGreaterThan(0);
 
-      const jobs = await getAllJobs(db, userId);
+      const jobs = await fetchAllJobs(userId);
       const greenhouseJobs = jobs.filter((job) => job.source === "greenhouse");
       expect(greenhouseJobs.length).toBeGreaterThan(0);
 
@@ -95,7 +123,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
       const secondRun = await startScrape(db, userId, { sources: ["greenhouse"] });
       expect(secondRun!.jobsInserted).toBe(0);
 
-      const jobsAfter = await getAllJobs(db, userId);
+      const jobsAfter = await fetchAllJobs(userId);
       expect(jobsAfter.length).toBe(jobs.length);
     } finally {
       await removeTrackedCompany(db, userId, { id: company.id }).catch(() => undefined);
@@ -105,7 +133,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
   it("scrapes aggregators without any company list and tags work types", async () => {
     const { db } = await import("@/lib/db");
     const { startScrape } = await import("./scraping.service");
-    const { deleteJobsBySource, getAllJobs } = await import("@/jobs/jobs.db");
+    const { deleteJobsBySource } = await import("@/jobs/jobs.db");
 
     const userId = testUserId;
 
@@ -124,7 +152,7 @@ describeIntegration("scrape pipeline (live, writes to db)", () => {
     expect(run!.tasksCompleted).toBe(3);
     expect(run!.jobsFound).toBeGreaterThan(0);
 
-    const jobs = await getAllJobs(db, userId);
+    const jobs = await fetchAllJobs(userId);
 
     // Every column the sources populate must survive the insert — workType and
     // the attribution fields were silently dropped by an incomplete mapping.

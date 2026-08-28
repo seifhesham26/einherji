@@ -1,5 +1,5 @@
 import { pgTable, text, integer, timestamp, boolean, pgEnum, uniqueIndex, index, jsonb } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 
 // ─── Better Auth Tables ───────────────────────────────────────────────────────
@@ -133,6 +133,61 @@ export const scrapeStatusEnum = pgEnum("scrape_status", [
   "cancelled",
 ]);
 
+// Where a job has got to. This is the application pipeline: a scraped row starts
+// as something you haven't looked at and ends as something that happened.
+//
+// It replaces `is_processed`, which was a single boolean meaning "we ran a
+// hiring-manager lookup on this" — a fact about an internal step rather than
+// about your hunt, and unreachable since that lookup started demanding a
+// logged-in LinkedIn session.
+//
+// Order matters: the UI reads this array to lay the pipeline out left to right,
+// so the terminal states are grouped at the end rather than sorted in.
+export const jobStatusEnum = pgEnum("job_status", [
+  "new",
+  "shortlisted",
+  "applying",
+  "applied",
+  "screening",
+  "interviewing",
+  "offer",
+  // ── Terminal ──
+  "rejected",
+  "ghosted",
+  "dismissed",
+]);
+
+// What happened to a job. Kept coarse on purpose: the point is a readable
+// history, not an audit log, so a note and a status change are the same kind of
+// thing seen from the user's side.
+export const jobEventKindEnum = pgEnum("job_event_kind", [
+  "status_change",
+  "note",
+  "reminder_set",
+]);
+
+// Why a job was dropped. Deliberately a short closed list rather than free text:
+// the point is to be able to count them later — "you dismiss 40% of what Wuzzuf
+// returns for wrong seniority" is a fact the matcher can act on, and a thousand
+// distinct sentences are not.
+export const jobDismissReasonEnum = pgEnum("job_dismiss_reason", [
+  "wrong_seniority",
+  "wrong_stack",
+  "location",
+  "salary",
+  "company",
+  // Not a judgement the user made on this posting — a rule they wrote earlier
+  // swept it up. Kept apart from the rest so the human reasons stay countable
+  // on their own.
+  "muted",
+  "other",
+]);
+
+// What a mute rule matches on. Company and title are the only two that earn a
+// rule — the same staffing agency reappearing forty times, or a title pattern
+// ("Sales", "Intern") the search keeps dragging in.
+export const muteRuleKindEnum = pgEnum("mute_rule_kind", ["company", "title"]);
+
 // ─── Criteria ─────────────────────────────────────────────────────────────────
 // The user's job search preferences. One active record at a time.
 
@@ -195,14 +250,134 @@ export const jobs = pgTable("jobs", {
   attributionText: text("attribution_text"),
   attributionUrl: text("attribution_url"),
 
-  isProcessed: boolean("is_processed").default(false),
+  // ── Pipeline ──
+  status: jobStatusEnum("status").notNull().default("new"),
+  statusChangedAt: timestamp("status_changed_at"),
+  // Kept separate from statusChangedAt: "when did I apply" is a question you ask
+  // months later, and by then the status has moved on several times.
+  appliedAt: timestamp("applied_at"),
+  notes: text("notes"),
+  // Same shape as leads.next_action_at, so follow-up reminders can eventually
+  // read both from one query rather than growing a second mechanism.
+  nextActionAt: timestamp("next_action_at"),
+  // Set alongside a move to dismissed, cleared when the job is reopened. On the
+  // row rather than only in the event body so it can be grouped and counted
+  // without parsing history.
+  dismissReason: jobDismissReasonEnum("dismiss_reason"),
+
+  // ── Ranking ──
+  // scoreJob runs at insert time and the result is stored, because sorting by
+  // relevance has to happen in the database. Scoring on read meant every row had
+  // to be shipped to the client before the best one could be identified.
+  score: integer("score"),
+  // Why it scored what it did. Stored alongside so a surprising ranking can be
+  // argued with rather than just distrusted.
+  scoreReasons: text("score_reasons").array(),
+
+  // ── Freshness ──
+  // Refreshed every time a scrape re-encounters the posting. A row whose
+  // lastSeenAt has stopped moving is a posting that has come down.
+  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+
+  // ── Cross-source identity ──
+  // A normalised company + title + location fingerprint. The unique index below
+  // is per source, so a role syndicated to RemoteOK and Arbeitnow lands twice;
+  // this is what lets the second copy be recognised and folded into the first.
+  dedupeKey: text("dedupe_key"),
+  // The other sources this same posting was found on, so folding a duplicate
+  // away doesn't lose the fact that it was there.
+  alsoOnSources: text("also_on_sources").array(),
+
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   // Deduplicate per user — the same job can legitimately appear for different users,
   // and the same id can repeat across sources.
   uniqueIndex("jobs_user_source_id_idx").on(table.userId, table.source, table.sourceJobId),
-  index("jobs_user_processed_idx").on(table.userId, table.isProcessed),
+  // The list's default read: one user's jobs in a status, best first. Ordering is
+  // part of the index because "top of the list" is the only page most users see,
+  // and a sort over every row to produce twenty is the whole cost of the query.
+  index("jobs_user_status_score_idx").on(table.userId, table.status, desc(table.score)),
+  // The duplicate lookup, which runs once per scraped batch.
+  index("jobs_user_dedupe_idx").on(table.userId, table.dedupeKey),
+  // Overdue follow-ups, the same query leads answers from its own table.
+  index("jobs_user_next_action_idx").on(table.userId, table.nextActionAt),
   index("jobs_bucket_idx").on(table.bucketId),
+]);
+
+// ─── Job events ───────────────────────────────────────────────────────────────
+// One row per thing that happened to a job. Without it a status column tells you
+// where something is and nothing about how it got there — and "when did I apply,
+// and what did I say" is most of what you want from an application months later.
+
+export const jobEvents = pgTable("job_events", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Cascade: an event is meaningless without the job it describes, unlike a lead,
+  // which is a person who outlives the posting.
+  jobId: text("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+
+  kind: jobEventKindEnum("kind").notNull(),
+  // Null on a note — there was no transition, which is exactly the difference.
+  fromStatus: jobStatusEnum("from_status"),
+  toStatus: jobStatusEnum("to_status"),
+  body: text("body"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // The timeline read: one job's history, newest first.
+  index("job_events_user_job_time_idx").on(table.userId, table.jobId, desc(table.createdAt)),
+]);
+
+// ─── Mute rules ───────────────────────────────────────────────────────────────
+// Things the user never wants to see again. Applied when a scrape writes, not
+// when the list reads: a muted posting should never occupy a row, and filtering
+// on read would leave it counted in every total and re-offered on every page.
+
+export const muteRules = pgTable("mute_rules", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  kind: muteRuleKindEnum("kind").notNull(),
+  // Stored as the user typed it, so the list they manage reads back the way they
+  // wrote it. Matching normalises both sides at comparison time instead.
+  pattern: text("pattern").notNull(),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // Every read is "all of this user's rules" — they are loaded whole, once per
+  // scrape, because matching happens in TypeScript against normalised text.
+  index("mute_rules_user_idx").on(table.userId),
+  // The same rule twice is a no-op that still has to be matched against every
+  // scraped row. Kind is part of the key: muting the company "Sales Force" and
+  // the title word "sales force" are different intentions.
+  uniqueIndex("mute_rules_user_kind_pattern_idx").on(table.userId, table.kind, table.pattern),
+]);
+
+// ─── Saved views ──────────────────────────────────────────────────────────────
+// A named set of filters. "Remote, 70+, this week, not dismissed" is a question
+// asked every morning, and rebuilding it by hand each time is the reason people
+// stop filtering at all.
+
+export const savedViews = pgTable("saved_views", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  name: text("name").notNull(),
+  // The filter set, validated by savedViewFiltersSchema on the way in and parsed
+  // again on the way out. jsonb rather than a column per filter because the
+  // filters change as the list grows new ones, and a migration per filter is a
+  // migration nobody will write.
+  filters: jsonb("filters").notNull(),
+  // Tab order, set by the user. Integer rather than an array on the user row so
+  // reordering one view doesn't rewrite the whole list.
+  position: integer("position").notNull().default(0),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // The tab strip: one user's views, in their order.
+  index("saved_views_user_position_idx").on(table.userId, table.position),
+  // Two tabs with the same name are indistinguishable once rendered.
+  uniqueIndex("saved_views_user_name_idx").on(table.userId, table.name),
 ]);
 
 // ─── Leads ────────────────────────────────────────────────────────────────────

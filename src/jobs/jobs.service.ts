@@ -2,13 +2,145 @@ import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
 import { findHiringManagers } from "@/lib/apify/client";
 import { getSettingsByUserId } from "@/settings/settings.db";
-import { deleteAllJobs, deleteJobsByIds, getAllJobs, getJobById, markJobProcessed } from "./jobs.db";
+import {
+  deleteAllJobs,
+  deleteJobsByIds,
+  getJobById,
+  getJobEvents,
+  getJobStatuses,
+  getJobs,
+  getOtherJobsAtCompany,
+  insertJobEvents,
+  moveJobsToBucket,
+  setJobsStatus,
+  updateJobNotes,
+  type NewJobEvent,
+} from "./jobs.db";
 import { insertLeads } from "@/leads/leads.db";
 import { consumeQuota } from "@/usage/usage.service";
-import type { ClearJobsInput, DeleteJobsInput, GetJobsInput } from "./jobs.validators";
+import { JOB_DISMISS_REASON_LABELS, JOB_STATUS_LABELS } from "./jobs.validators";
+import type {
+  ClearJobsInput,
+  DeleteJobsInput,
+  GetJobDetailInput,
+  GetJobEventsInput,
+  GetJobsInput,
+  MoveJobsToBucketInput,
+  SetJobStatusInput,
+  UpdateJobNotesInput,
+} from "./jobs.validators";
+
+// Enough to say "they're hiring for these too" without turning the detail panel
+// into a second list.
+const MAX_OTHER_ROLES_AT_COMPANY = 6;
 
 export async function fetchJobs(db: Database, userId: string, input: GetJobsInput) {
-  return getAllJobs(db, userId, { processed: input.processed, bucketId: input.bucketId });
+  return getJobs(db, userId, input);
+}
+
+export async function fetchJobEvents(db: Database, userId: string, input: GetJobEventsInput) {
+  // Scoped through the job so an id belonging to someone else returns nothing
+  // rather than their history.
+  const job = await getJobById(db, userId, input.jobId);
+  if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+
+  return getJobEvents(db, userId, input.jobId);
+}
+
+/**
+ * Moves one or more jobs along the pipeline.
+ *
+ * The statuses are read before the update so each event can record what the job
+ * moved *from* — a history that only says where something ended up can't tell
+ * you whether you applied and were rejected, or dismissed it without applying.
+ *
+ * Jobs already in the target status are skipped by the update itself, so a bulk
+ * action over a mixed selection writes events only for what genuinely changed.
+ */
+export async function changeJobStatus(db: Database, userId: string, input: SetJobStatusInput) {
+  const previousStatuses = await getJobStatuses(db, userId, input.jobIds);
+  const updated = await setJobsStatus(
+    db,
+    userId,
+    input.jobIds,
+    input.status,
+    input.dismissReason,
+  );
+
+  if (updated.length === 0) {
+    return { updatedCount: 0, status: input.status };
+  }
+
+  // The reason is on the row, but the timeline is what someone reads six weeks
+  // later — a history that says "dismissed" without saying why is the thing the
+  // reason was added to fix.
+  const body = describeChange(input);
+
+  const events: NewJobEvent[] = updated.map((job) => ({
+    userId,
+    jobId: job.id,
+    kind: "status_change" as const,
+    fromStatus: previousStatuses.get(job.id) ?? null,
+    toStatus: input.status,
+    body,
+  }));
+
+  await insertJobEvents(db, events);
+
+  return { updatedCount: updated.length, status: input.status };
+}
+
+function describeChange(input: SetJobStatusInput): string | null {
+  const note = input.note && input.note.length > 0 ? input.note : null;
+  if (input.status !== "dismissed" || !input.dismissReason) return note;
+
+  const reason = JOB_DISMISS_REASON_LABELS[input.dismissReason];
+  return note ? `${reason} — ${note}` : reason;
+}
+
+/**
+ * Moves jobs into a different hunt.
+ *
+ * No event is written. A bucket is filing, not progress: recording it in the
+ * timeline would bury the status history it exists to make readable.
+ */
+export async function refileJobs(db: Database, userId: string, input: MoveJobsToBucketInput) {
+  const moved = await moveJobsToBucket(db, userId, input.jobIds, input.bucketId);
+  return { movedCount: moved.length };
+}
+
+/**
+ * Everything the detail panel shows, in one round trip.
+ *
+ * The job, its history and the company's other open roles are three queries the
+ * panel would otherwise fire as three requests — and the panel opens on a key
+ * press, so it opens on every j/k the user holds down.
+ */
+export async function fetchJobDetail(db: Database, userId: string, input: GetJobDetailInput) {
+  const job = await getJobById(db, userId, input.jobId);
+  if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+
+  const [events, otherRoles] = await Promise.all([
+    getJobEvents(db, userId, job.id),
+    getOtherJobsAtCompany(db, userId, job.company, job.id, MAX_OTHER_ROLES_AT_COMPANY),
+  ]);
+
+  return { job, events, otherRoles };
+}
+
+export async function saveJobNotes(db: Database, userId: string, input: UpdateJobNotesInput) {
+  const updated = await updateJobNotes(db, userId, input.jobId, input.notes);
+  if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+
+  // Only a written note is worth an event. Clearing one is a correction, and a
+  // timeline full of "note removed" is noise nobody asked for.
+  if (input.notes.length > 0) {
+    await insertJobEvents(db, [
+      { userId, jobId: input.jobId, kind: "note", body: input.notes },
+    ]);
+  }
+
+  return updated;
 }
 
 /**
@@ -27,7 +159,7 @@ export async function removeJobs(db: Database, userId: string, input: DeleteJobs
 export async function clearJobs(db: Database, userId: string, input: ClearJobsInput) {
   const deleted = await deleteAllJobs(db, userId, {
     bucketId: input.bucketId,
-    onlyProcessed: input.onlyProcessed,
+    onlyClosed: input.onlyClosed,
   });
   return { deletedCount: deleted.length };
 }
@@ -83,6 +215,20 @@ export async function findAndSaveManagers(db: Database, userId: string, jobId: s
     about: profile.about,
   })));
 
-  await markJobProcessed(db, userId, jobId);
+  // Having a contact means you're working this one. Only nudged off "new", so a
+  // job you'd already moved to applied isn't dragged backwards by a lookup.
+  if (job.status === "new") {
+    await changeJobStatus(db, userId, {
+      jobIds: [job.id],
+      status: "shortlisted",
+      note: `Found ${insertedLeads.length} contact${insertedLeads.length === 1 ? "" : "s"}`,
+    });
+  }
+
   return { leads: insertedLeads };
+}
+
+/** The label for a status, for messages that name one. */
+export function describeJobStatus(status: keyof typeof JOB_STATUS_LABELS): string {
+  return JOB_STATUS_LABELS[status];
 }

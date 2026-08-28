@@ -115,7 +115,7 @@ describeIntegration("buckets (live, writes to db)", () => {
       companyUrl: null, location: null, salary: null, description: null,
       postedAt: null, workType: "unknown", isRemote: null, tags: null,
       attributionText: null, attributionUrl: null,
-    }], bucket.id);
+    }], { bucketId: bucket.id, query: { titles: [], locations: [] } });
 
     expect(await db.select().from(jobs).where(eq(jobs.bucketId, bucket.id))).toHaveLength(1);
 
@@ -146,7 +146,7 @@ describeIntegration("buckets (live, writes to db)", () => {
     };
 
     // First run has no bucket — this is the dashboard button.
-    const [unfiled] = await insertJobs(db, userId, [scraped]);
+    const [unfiled] = await insertJobs(db, userId, [scraped], { query: { titles: [], locations: [] } });
     expect(unfiled.bucketId).toBeNull();
 
     const bucket = await createBucket(db, userId, {
@@ -159,7 +159,7 @@ describeIntegration("buckets (live, writes to db)", () => {
 
     // Second run finds the same job under a bucket. Nothing is newly inserted —
     // the run must not report it as a find — but the job is now filed.
-    const inserted = await insertJobs(db, userId, [scraped], bucket.id);
+    const inserted = await insertJobs(db, userId, [scraped], { bucketId: bucket.id, query: { titles: [], locations: [] } });
     expect(inserted).toHaveLength(0);
 
     const [adopted] = await db.select().from(jobs).where(eq(jobs.id, unfiled.id));
@@ -196,8 +196,8 @@ describeIntegration("buckets (live, writes to db)", () => {
       attributionText: null, attributionUrl: null,
     };
 
-    const [filed] = await insertJobs(db, userId, [scraped], first.id);
-    await insertJobs(db, userId, [scraped], second.id);
+    const [filed] = await insertJobs(db, userId, [scraped], { bucketId: first.id, query: { titles: [], locations: [] } });
+    await insertJobs(db, userId, [scraped], { bucketId: second.id, query: { titles: [], locations: [] } });
 
     const [unchanged] = await db.select().from(jobs).where(eq(jobs.id, filed.id));
     expect(unchanged.bucketId).toBe(first.id);

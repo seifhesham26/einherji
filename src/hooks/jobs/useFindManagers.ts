@@ -10,6 +10,7 @@ export function useFindManagers() {
       utils.jobs.getAll.invalidate();
       utils.leads.getAll.invalidate();
       utils.jobs.getStats.invalidate();
+      utils.jobs.getStatusCounts.invalidate();
       toast.success(`Found ${data.leads.length} hiring manager${data.leads.length !== 1 ? "s" : ""}`);
     },
     onError: (error) => {

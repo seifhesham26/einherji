@@ -10,6 +10,7 @@ export function useDeleteJobs() {
     onSuccess: ({ deletedCount }) => {
       utils.jobs.getAll.invalidate();
       utils.jobs.getStats.invalidate();
+      utils.jobs.getStatusCounts.invalidate();
       // Bucket counts sit in the bucket bar above the list and would otherwise
       // keep showing the pre-delete number until something else refetched them.
       utils.buckets.getAll.invalidate();

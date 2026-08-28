@@ -10,6 +10,7 @@ export function useScrapeJobs() {
     onSuccess: (run) => {
       utils.jobs.getAll.invalidate();
       utils.jobs.getStats.invalidate();
+      utils.jobs.getStatusCounts.invalidate();
       utils.scraping.getLatestRun.invalidate();
 
       if (!run) return;

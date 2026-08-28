@@ -73,6 +73,12 @@ vi.mock("@/lib/scrapers/ats/fetch-ats-jobs", async (importOriginal) => ({
   fetchAtsJobs: (...args: unknown[]) => mocks.fetchAtsJobs(...args),
 }));
 vi.mock("@/credentials/credentials.service", () => ({ resolveCredentials: vi.fn(async () => null) }));
+// Loaded once per run to filter what the sources return. No rules here, so
+// every scraped job reaches insertJobs — muting has its own unit tests.
+const muteRules = vi.fn(async () => [] as unknown[]);
+vi.mock("@/mute-rules/mute-rules.db", () => ({
+  getMuteRules: () => muteRules(),
+}));
 vi.mock("@/jobs/jobs.db", () => ({
   getExistingSourceJobIds: vi.fn(async () => new Set<string>()),
   insertJobs: (...args: unknown[]) => mocks.insertJobs(...args),

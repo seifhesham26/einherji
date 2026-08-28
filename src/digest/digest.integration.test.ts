@@ -32,7 +32,7 @@ async function addJob(sourceJobId: string, title: string) {
       attributionText: null,
       attributionUrl: null,
     },
-  ]);
+  ], { query: { titles: [], locations: [] } });
   return job;
 }
 

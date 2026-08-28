@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "test:integration": "cross-env SCRAPER_INTEGRATION=1 vitest run src/server src/usage src/credentials src/messages src/leads src/digest src/buckets src/scraping/scraping.integration.test.ts",
-    "seed:buckets": "tsx scripts/seed-buckets.ts"
+    "seed:buckets": "tsx scripts/seed-buckets.ts",
+    "backfill:jobs": "tsx scripts/backfill-jobs.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",

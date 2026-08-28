@@ -10,6 +10,7 @@ export function useClearJobs() {
     onSuccess: ({ deletedCount }) => {
       utils.jobs.getAll.invalidate();
       utils.jobs.getStats.invalidate();
+      utils.jobs.getStatusCounts.invalidate();
       utils.buckets.getAll.invalidate();
 
       toast.success(

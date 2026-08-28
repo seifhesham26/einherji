@@ -76,7 +76,7 @@ describeIntegration("referential integrity (live, writes to db)", () => {
         attributionText: null,
         attributionUrl: null,
       },
-    ]);
+    ], { query: { titles: [], locations: [] } });
 
     const [lead] = await insertLeads(db, testUserId, [
       { jobId: job.id, firstName: "Attached", company: "Test Co" },
