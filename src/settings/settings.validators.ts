@@ -27,6 +27,13 @@ export const updateTelegramSchema = z.object({
   telegramChatId: z.string().trim().max(64).optional(),
 });
 
+// Both nullable, because clearing a key is as deliberate an action as setting
+// one — an account that stops paying its own bill has to be able to say so.
+export const updateAiKeysSchema = z.object({
+  openrouterApiKey: z.string().trim().max(200).nullable().optional(),
+  openaiApiKey: z.string().trim().max(200).nullable().optional(),
+});
+
 export const updateJobSourcesSchema = z.object({
   jobSources: z.array(jobSourceNameSchema).min(1, "Pick at least one source"),
 });
@@ -41,6 +48,7 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type UpdateScrapingProxyInput = z.infer<typeof updateScrapingProxySchema>;
 export type UpdateIntegrationsInput = z.infer<typeof updateIntegrationsSchema>;
 export type UpdateJobSourcesInput = z.infer<typeof updateJobSourcesSchema>;
+export type UpdateAiKeysInput = z.infer<typeof updateAiKeysSchema>;
 
 export type UpdateDigestInput = z.infer<typeof updateDigestSchema>;
 export type DigestChannel = z.infer<typeof digestChannelSchema>;

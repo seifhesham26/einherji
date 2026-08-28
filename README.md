@@ -1,4 +1,4 @@
-# Einherji: AI Job Hunter
+# Einherji
 
 Einherji is an automated AI-powered job search assistant. It scrapes LinkedIn for job postings, identifies hiring managers, and uses AI (via OpenRouter/OpenAI) to generate personalized outreach messages based on your CV.
 

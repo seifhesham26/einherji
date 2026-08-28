@@ -4,7 +4,7 @@ import type { Database } from "@/lib/db";
 import { userSettings } from "@/lib/db/schema";
 import { decryptOptionalSecret, encryptOptionalSecret } from "@/lib/crypto/secret-box";
 
-// The two columns on this table that hold third-party keys. Listed once so a new
+// The columns on this table that hold third-party keys. Listed once so a new
 // secret column can't be added without a decision about encrypting it.
 type SettingsRow = typeof userSettings.$inferSelect;
 
@@ -14,6 +14,8 @@ function decryptSecrets(settings: SettingsRow): SettingsRow {
     apifyApiToken: decryptOptionalSecret(settings.apifyApiToken),
     scrapingProxyApiKey: decryptOptionalSecret(settings.scrapingProxyApiKey),
     telegramBotToken: decryptOptionalSecret(settings.telegramBotToken),
+    openrouterApiKey: decryptOptionalSecret(settings.openrouterApiKey),
+    openaiApiKey: decryptOptionalSecret(settings.openaiApiKey),
   };
 }
 
@@ -42,6 +44,12 @@ export async function upsertUserSettings(
       : {}),
     ...("telegramBotToken" in data
       ? { telegramBotToken: encryptOptionalSecret(data.telegramBotToken) }
+      : {}),
+    ...("openrouterApiKey" in data
+      ? { openrouterApiKey: encryptOptionalSecret(data.openrouterApiKey) }
+      : {}),
+    ...("openaiApiKey" in data
+      ? { openaiApiKey: encryptOptionalSecret(data.openaiApiKey) }
       : {}),
   };
 

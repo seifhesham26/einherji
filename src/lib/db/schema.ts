@@ -183,6 +183,40 @@ export const jobDismissReasonEnum = pgEnum("job_dismiss_reason", [
   "other",
 ]);
 
+// How senior the posting is, read out of the description rather than the title.
+// Titles lie in both directions — "Senior" on a role wanting two years, nothing
+// at all on one wanting eight.
+export const seniorityLevelEnum = pgEnum("seniority_level", [
+  "intern",
+  "junior",
+  "mid",
+  "senior",
+  "staff",
+  "principal",
+  "lead",
+  "unknown",
+]);
+
+// What the posting actually says about where the work happens. Separate from
+// jobs.is_remote, which is whatever flag the board set — boards call a role
+// remote when it means "remote, three days a week in Berlin".
+export const remotePolicyEnum = pgEnum("remote_policy", [
+  "remote",
+  "hybrid",
+  "onsite",
+  "unknown",
+]);
+
+// What the AI wrote about a job, per kind. One table rather than four columns:
+// they share a shape (a prompt, a body, the model that produced it) and differ
+// only in what was asked for.
+export const jobDocumentKindEnum = pgEnum("job_document_kind", [
+  "cover_letter",
+  "application_answer",
+  "cv_bullets",
+  "interview_prep",
+]);
+
 // What a mute rule matches on. Company and title are the only two that earn a
 // rule — the same staffing agency reappearing forty times, or a title pattern
 // ("Sales", "Intern") the search keeps dragging in.
@@ -274,6 +308,31 @@ export const jobs = pgTable("jobs", {
   // argued with rather than just distrusted.
   scoreReasons: text("score_reasons").array(),
 
+  // ── Extracted facts ──
+  // Read out of the description once by a model, then stored — because the point
+  // of extracting them is that they become filters, and a filter has to run in
+  // the database. Kept as columns on the job rather than a side table for the
+  // same reason: a WHERE clause across a join is a WHERE clause nobody writes.
+  seniority: seniorityLevelEnum("seniority"),
+  yearsExperienceMin: integer("years_experience_min"),
+  techStack: text("tech_stack").array(),
+  // Normalised to a year, whatever period the posting quoted, so "60k" and
+  // "5k per month" are comparable. No currency conversion happens — that needs
+  // live FX rates this app has no source for — so the currency is stored beside
+  // the number and shown, rather than pretending the figures share a scale.
+  salaryMinAnnual: integer("salary_min_annual"),
+  salaryMaxAnnual: integer("salary_max_annual"),
+  salaryCurrency: text("salary_currency"),
+  remotePolicy: remotePolicyEnum("remote_policy"),
+  // Null means the posting did not say, which is different from "no". Most do
+  // not say, and reading silence as a refusal would hide most of the market.
+  offersVisaSponsorship: boolean("offers_visa_sponsorship"),
+  // ISO 639-1. Worth knowing before you apply in the wrong language.
+  postingLanguage: text("posting_language"),
+  // Set when extraction succeeds. Also the backlog marker — null means this job
+  // has never been read.
+  factsExtractedAt: timestamp("facts_extracted_at"),
+
   // ── Freshness ──
   // Refreshed every time a scrape re-encounters the posting. A row whose
   // lastSeenAt has stopped moving is a posting that has come down.
@@ -302,6 +361,12 @@ export const jobs = pgTable("jobs", {
   // Overdue follow-ups, the same query leads answers from its own table.
   index("jobs_user_next_action_idx").on(table.userId, table.nextActionAt),
   index("jobs_bucket_idx").on(table.bucketId),
+  // "What still needs reading" — the backlog the extraction pass works through.
+  // Partial, because the answer is empty for a well-tended account, and a full
+  // index over every job to find none of them is pure write cost.
+  index("jobs_user_unextracted_idx")
+    .on(table.userId)
+    .where(sql`${table.factsExtractedAt} is null`),
 ]);
 
 // ─── Job events ───────────────────────────────────────────────────────────────
@@ -326,6 +391,63 @@ export const jobEvents = pgTable("job_events", {
 }, (table) => [
   // The timeline read: one job's history, newest first.
   index("job_events_user_job_time_idx").on(table.userId, table.jobId, desc(table.createdAt)),
+]);
+
+// ─── Fit reports ──────────────────────────────────────────────────────────────
+// The model's answer to "is this one worth applying to". Distinct from
+// jobs.score, which is a keyword count cheap enough to run on every row — this
+// reads the description against the CV, costs a completion, and is therefore
+// asked for one job at a time and kept.
+
+export const jobFitReports = pgTable("job_fit_reports", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  jobId: text("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+
+  // 0-100, the headline. Deliberately not written back onto jobs.score: the two
+  // measure different things, and overwriting the cheap one with the expensive
+  // one would make the list's order depend on which jobs you happened to open.
+  matchPercent: integer("match_percent").notNull(),
+  summary: text("summary").notNull(),
+  // [{ requirement, verdict, evidence }] — the requirement-by-requirement table.
+  // jsonb because it is read whole and never queried into.
+  requirements: jsonb("requirements").notNull(),
+  // What you are missing, and what to lead with if you apply anyway.
+  gaps: text("gaps").array().notNull().default([]),
+  emphasise: text("emphasise").array().notNull().default([]),
+
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // One report per job. Re-running replaces it rather than accumulating
+  // versions — a fit report is a current answer, not a history.
+  uniqueIndex("job_fit_reports_user_job_idx").on(table.userId, table.jobId),
+]);
+
+// ─── Job documents ────────────────────────────────────────────────────────────
+// The things you would otherwise write by hand for every application: the cover
+// letter, the essay answers, CV bullets pointed at this description, interview
+// prep. The expensive part of applying, and until now the part the app helped
+// with least.
+
+export const jobDocuments = pgTable("job_documents", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  jobId: text("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+
+  kind: jobDocumentKindEnum("kind").notNull(),
+  // The application's own question, for an answer. Null for the kinds that carry
+  // one fixed brief.
+  prompt: text("prompt"),
+  body: text("body").notNull(),
+
+  model: text("model").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // The panel's read: this job's documents, newest first. No unique constraint —
+  // an application asks four different questions, and two drafts of a cover
+  // letter are two things worth comparing.
+  index("job_documents_user_job_idx").on(table.userId, table.jobId, desc(table.createdAt)),
 ]);
 
 // ─── Mute rules ───────────────────────────────────────────────────────────────
@@ -449,6 +571,14 @@ export const userSettings = pgTable("user_settings", {
 
   // Personal Apify API token. Per-account by design — Apify bills per run.
   apifyApiToken: text("apify_api_token"),
+
+  // Personal AI keys. Every other third-party key here is per-account and
+  // encrypted; these were the exception, billed to one server-wide key, which
+  // works exactly until a second person logs in. Both optional — without them
+  // the server key is used, which is right for a single-user install and wrong
+  // for anything else.
+  openrouterApiKey: text("openrouter_api_key"),
+  openaiApiKey: text("openai_api_key"),
 
   // Which scrapers to run. Defaults to apify so existing users are unaffected
   // until they opt in to the self-hosted sources.
@@ -595,6 +725,11 @@ export const usageActionEnum = pgEnum("usage_action", [
   "parse_cv",
   "find_managers",
   "scrape",
+  // One completion each. Separate actions rather than one shared bucket, so a
+  // batch extraction cannot eat the allowance for the cover letter you needed.
+  "extract_job_facts",
+  "generate_fit_report",
+  "generate_document",
 ]);
 
 export const usageEvents = pgTable("usage_events", {

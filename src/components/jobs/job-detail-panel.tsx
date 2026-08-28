@@ -34,6 +34,9 @@ import { QUICK_ACTIONS, getJobStatusDisplay } from "./job-status-display";
 import { sourceLabel } from "./job-source-labels";
 import JobScoreBadge from "./job-score-badge";
 import JobTimeline from "./job-timeline";
+import JobFactsStrip from "./job-facts-strip";
+import JobFitReport from "./job-fit-report";
+import JobDocumentsPanel from "./job-documents-panel";
 import JobNotesEditor from "./job-notes-editor";
 
 interface JobDetailPanelProps {
@@ -230,6 +233,23 @@ export default function JobDetailPanel({
                 {formatRelativeDate(job.postedAt)}
               </DetailFact>
             </div>
+
+            {/* What was read out of the description, or the offer to read it.
+                Above the description itself, because the extracted version is
+                the one you want first. */}
+            <JobFactsStrip job={job} />
+
+            <Separator />
+
+            <Section title="Your fit">
+              <JobFitReport jobId={job.id} />
+            </Section>
+
+            <Separator />
+
+            <Section title="Write something">
+              <JobDocumentsPanel jobId={job.id} />
+            </Section>
 
             <Separator />
 

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
+import { ARE_SIGNUPS_OPEN } from "@/lib/signups";
 import { resolveDestination } from "./resolve-destination";
 
 const loginSchema = z.object({
@@ -50,8 +51,8 @@ export default function LoginForm() {
   return (
     <div className="w-full max-w-sm space-y-8">
       <div className="space-y-1">
-        <h2 className="text-2xl font-semibold tracking-tight">Welcome back</h2>
-        <p className="text-sm text-muted-foreground">Sign in to your AI Job Hunter account</p>
+        <h2 className="console-display text-2xl leading-tight">Welcome back</h2>
+        <p className="text-sm text-muted-foreground">Sign in to your Einherji account</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -83,12 +84,16 @@ export default function LoginForm() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        No account yet?{" "}
-        <Link href="/register" className="text-foreground font-medium underline-offset-4 hover:underline">
-          Create one
-        </Link>
-      </p>
+      {/* Dropped entirely rather than shown disabled while signups are closed.
+          A link to a door that is shut is worse than no link. */}
+      {ARE_SIGNUPS_OPEN && (
+        <p className="text-center text-sm text-muted-foreground">
+          No account yet?{" "}
+          <Link href="/register" className="text-foreground font-medium underline-offset-4 hover:underline">
+            Create one
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

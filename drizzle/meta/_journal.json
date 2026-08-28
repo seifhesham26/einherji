@@ -113,6 +113,13 @@
       "when": 1787907319126,
       "tag": "0015_amazing_salo",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787923583838,
+      "tag": "0016_good_the_hunter",
+      "breakpoints": true
     }
   ]
 }

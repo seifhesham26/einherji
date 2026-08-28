@@ -1,6 +1,7 @@
 import type { Database } from "@/lib/db";
 import { extractCvFromUrl } from "@/lib/cv-parser";
 import { consumeQuota } from "@/usage/usage.service";
+import { getSettingsByUserId } from "@/settings/settings.db";
 import { deactivateUserCriteria, getActiveCriteria, insertCriteria } from "./criteria.db";
 import type { ExtractFromCvInput, SaveCriteriaInput } from "./criteria.validators";
 
@@ -12,7 +13,15 @@ export async function fetchActiveCriteria(db: Database, userId: string) {
 // (AUDIT M3), which is also what gives the quota somewhere to live.
 export async function extractCv(db: Database, userId: string, input: ExtractFromCvInput) {
   await consumeQuota(db, userId, "parse_cv");
-  return extractCvFromUrl(input.cvUrl, input.model);
+
+  // The account pays for its own parse when it has supplied a key, the same way
+  // it does for every other AI call now.
+  const settings = await getSettingsByUserId(db, userId);
+
+  return extractCvFromUrl(input.cvUrl, input.model, {
+    openrouterApiKey: settings?.openrouterApiKey ?? null,
+    openaiApiKey: settings?.openaiApiKey ?? null,
+  });
 }
 
 export async function saveCriteria(db: Database, criteriaData: SaveCriteriaInput, userId: string) {

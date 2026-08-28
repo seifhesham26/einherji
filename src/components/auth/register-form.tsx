@@ -69,8 +69,10 @@ export default function RegisterForm() {
   return (
     <div className="w-full max-w-sm space-y-8">
       <div className="space-y-1">
-        <h2 className="text-2xl font-semibold tracking-tight">Create your account</h2>
-        <p className="text-sm text-muted-foreground">Start automating your job hunt today</p>
+        <h2 className="console-display text-2xl leading-tight">Create your account</h2>
+        <p className="text-sm text-muted-foreground">
+          Two minutes, then point it at what you are looking for.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

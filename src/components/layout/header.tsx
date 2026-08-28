@@ -30,7 +30,7 @@ function resolvePageTitle(pathname: string): string {
     .filter((route) => route !== "/" && pathname.startsWith(`${route}/`))
     .sort((a, b) => b.length - a.length)[0];
 
-  return match ? PAGE_TITLES[match] : "AI Job Hunter";
+  return match ? PAGE_TITLES[match] : "Einherji";
 }
 
 export default function Header({ onOpenSidebar }: { onOpenSidebar: () => void }) {

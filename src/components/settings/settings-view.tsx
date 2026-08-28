@@ -5,6 +5,7 @@ import ProfileSection from "./profile-section";
 import JobSourcesSection from "./job-sources-section";
 import DailyRunSection from "./daily-run-section";
 import MuteRulesSection from "./mute-rules-section";
+import AiKeysSection from "./ai-keys-section";
 import SourceCredentialsSection from "./source-credentials-section";
 import IntegrationsSection from "./integrations-section";
 
@@ -14,7 +15,7 @@ export default function SettingsView() {
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Manage your profile, job sources, what to ignore, and integrations.
+          Manage your profile, job sources, what to ignore, your AI keys, and integrations.
         </p>
       </div>
 
@@ -33,6 +34,12 @@ export default function SettingsView() {
       <Separator />
 
       <DailyRunSection />
+
+      <Separator />
+
+      {/* Beside the source credentials, because it is the same kind of decision:
+          which of these third-party bills is yours. */}
+      <AiKeysSection />
 
       <Separator />
 

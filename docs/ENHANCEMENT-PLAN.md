@@ -171,7 +171,7 @@ Two departures from the list above, both deliberate:
   prompt; a digit picks a reason, Enter skips it. Both paths are two keystrokes,
   so nobody is taxed for explaining themselves and nobody is stopped for not.
 
-### Phase 3 — Make the AI do the work you're doing by hand · ~4 days
+### Phase 3 — Make the AI do the work you're doing by hand · ~4 days · **built, bar one**
 
 Today the AI writes a DM. The expensive parts of a job hunt are reading the description,
 judging the fit, tailoring the CV, writing the letter and answering the form's four essay
@@ -185,6 +185,23 @@ questions. All of it is well within what a model does reliably, and all of it is
 - **Interview prep pack.** Likely questions derived from the JD, plus a short company brief, generated when a job moves to *interviewing*.
 - **Semantic matching.** `matchesQuery` is keyword-binary — it can't tell "React Developer" from "Frontend Engineer (React)". Embed the JD and your profile once each, cosine-rank, and hundreds of equal "matches" become a ranked thirty.
 - **Per-account AI keys.** Same pattern as `source_credentials`, which already exists, is already encrypted, and already has UI. Do it before a second person logs in.
+
+**Semantic matching is the one bullet not built.** It needs `CREATE EXTENSION vector`
+on the Neon branch and an embeddings provider, plus a backfill over every stored job.
+Neither can be verified from here — the same reason no migration in this plan has been
+applied — and shipping unverifiable SQL against a live database is exactly the thing worth
+not doing. Everything else in the phase is in. `matchesQuery` stays keyword-binary until
+then; the fit report is what answers "is this actually for me" in the meantime, and it does
+it better, because it reads the CV rather than counting words in it.
+
+Two things worked out while building, both kept:
+
+- **The fit report feeds the cover letter.** It has already decided which parts of this CV
+  answer this description; making the letter re-derive that from scratch would be paying
+  twice for the same reasoning and getting the worse answer the second time.
+- **The model reports the salary and its period; the app does the multiplication.** A model
+  that silently converts a monthly figure to annual is a model whose arithmetic you cannot
+  check, and the number ends up in a filter.
 
 ### Phase 4 — Follow-through · ~2 days
 

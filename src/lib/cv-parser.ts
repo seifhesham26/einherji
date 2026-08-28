@@ -1,7 +1,7 @@
 import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
 import { assertSafeUrl } from "@/lib/scrapers/http/assert-safe-url";
 
-import { getClient } from "@/lib/ai/client";
+import { resolveAiClient, type AiCredentials } from "@/lib/ai/resolve-ai-client";
 
 // A CV is a document, not a data set. Anything past this is not a CV.
 const MAX_CV_BYTES = 15 * 1024 * 1024;
@@ -13,7 +13,12 @@ export interface ExtractedCvData {
   suggestedTitles: string[];
 }
 
-export async function extractCvFromUrl(cvUrl: string, model: string = DEFAULT_MODEL): Promise<ExtractedCvData> {
+export async function extractCvFromUrl(
+  cvUrl: string,
+  model: string = DEFAULT_MODEL,
+  // Whose key pays. Omitted falls back to the server key.
+  credentials?: AiCredentials,
+): Promise<ExtractedCvData> {
   const { extractText } = await import("unpdf");
 
   // cvUrl arrives from the client and is only checked by z.url(), which accepts
@@ -42,7 +47,7 @@ export async function extractCvFromUrl(cvUrl: string, model: string = DEFAULT_MO
     return { skills: [], elevatorPitch: "", resumeText: "", suggestedTitles: [] };
   }
 
-  const client = getClient(model);
+  const client = resolveAiClient(model, credentials);
 
   let completion;
   try {

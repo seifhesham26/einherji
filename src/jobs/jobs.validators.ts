@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jobSourceNameSchema, workTypeSchema } from "@/lib/scrapers/job-source.types";
+import { remotePolicySchema, seniorityLevelSchema } from "@/job-insights/job-insights.validators";
 
 // Mirrors jobStatusEnum in the schema, in the same order — the UI reads this to
 // lay the pipeline out, so the sequence is meaningful and not alphabetical.
@@ -88,6 +89,10 @@ export const OFFERED_DISMISS_REASONS: JobDismissReason[] = jobDismissReasonValue
 
 // How the list is ordered. Score is the default because the whole point of
 // storing it was to stop date order burying the good ones.
+// Well above any real salary, and low enough that a typo cannot ask the database
+// for a comparison against a number no column can hold.
+const MAX_ANNUAL_SALARY_FILTER = 10_000_000;
+
 // A year is already well past the point where a posting is live; anything
 // longer is the same as no filter at all.
 const MAX_POSTED_WITHIN_DAYS = 365;
@@ -113,6 +118,18 @@ export const getJobsSchema = z.object({
   workTypes: z.array(workTypeSchema).min(1).optional(),
   isRemote: z.boolean().optional(),
   minScore: z.number().int().min(0).max(100).optional(),
+
+  // ── Filters on extracted facts ──
+  // These only match postings that have been read, which is the honest cost of
+  // the feature: a job whose description has never been analysed has no
+  // seniority and no annual figure, so it cannot satisfy either filter. The UI
+  // says so rather than leaving the user to work out why a filter emptied the
+  // list.
+  seniorities: z.array(seniorityLevelSchema).min(1).optional(),
+  remotePolicies: z.array(remotePolicySchema).min(1).optional(),
+  // Compared against the top of the quoted band, so a 50-70k role satisfies a
+  // 60k floor. No currency conversion — see the schema comment on salary_currency.
+  minAnnualSalary: z.number().int().min(0).max(MAX_ANNUAL_SALARY_FILTER).optional(),
   // Relative, not an absolute date. A saved view holding "posted after 21 Aug"
   // means something different every morning, and "this week" is the question
   // people actually ask.

@@ -40,7 +40,7 @@ export const TRIAGE_SHORTCUTS: { keys: string; description: string }[] = [
   { keys: "Enter", description: "Open the detail panel" },
   { keys: "s", description: "Shortlist" },
   { keys: "a", description: "Mark applied" },
-  { keys: "x", description: "Dismiss — then a reason, or Enter for none" },
+  { keys: "x", description: "Dismiss, then a reason or Enter for none" },
   { keys: "o", description: "Open the posting in a new tab" },
   { keys: "Space", description: "Select for a bulk action" },
   { keys: "/", description: "Jump to search" },

@@ -74,7 +74,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="rounded-md bg-primary/10 p-1 shrink-0">
             <BrainCircuit className="h-4 w-4 text-primary" />
           </div>
-          <span className="text-sm font-semibold tracking-tight truncate">AI Job Hunter</span>
+          <span className="text-sm font-semibold tracking-tight truncate">Einherji</span>
           <button
             onClick={onClose}
             className="ml-auto shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"

@@ -5,6 +5,7 @@ import { getActiveCriteria } from "@/criteria/criteria.db";
 import { getBucketById } from "@/buckets/buckets.db";
 import { getLeadById } from "@/leads/leads.db";
 import { getJobById } from "@/jobs/jobs.db";
+import { getSettingsByUserId } from "@/settings/settings.db";
 import { setLeadMessageSent } from "@/leads/leads.db";
 import { consumeQuota } from "@/usage/usage.service";
 import {
@@ -48,9 +49,12 @@ export async function generateAndSaveMessage(db: Database, userId: string, input
   // Both scoped to userId. The lead lookup wasn't, which meant supplying someone
   // else's leadId fed their hiring manager's name, headline, about text and
   // recent posts into an LLM prompt and saved the result to your account.
-  const [lead, activeCriteria] = await Promise.all([
+  const [lead, activeCriteria, settings] = await Promise.all([
     getLeadById(db, userId, input.leadId),
     getActiveCriteria(db, userId),
+    // Whose key pays for the completion. Every other third-party key in this app
+    // was already per-account; this one was billed to a single server-wide key.
+    getSettingsByUserId(db, userId),
   ]);
 
   if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Lead not found" });
@@ -90,6 +94,11 @@ export async function generateAndSaveMessage(db: Database, userId: string, input
     leadRecentPosts: lead.recentPosts ?? undefined,
 
     senderPitch,
+
+    credentials: {
+      openrouterApiKey: settings?.openrouterApiKey ?? null,
+      openaiApiKey: settings?.openaiApiKey ?? null,
+    },
 
     ...(job ? { jobTitle: job.title, jobDescription: job.description ?? "", jobUrl: job.jobUrl } : {}),
     ...(isJobSeeking

@@ -9,7 +9,7 @@ Paste it as your initial prompt, then follow up with the individual page prompts
 ## Master Project Initialization Prompt
 
 ```
-Build me a full-stack Next.js 14 (App Router) application called "AI Job Hunter".
+Build me a full-stack Next.js 14 (App Router) application called "Einherji".
 
 ## Tech Stack
 - Next.js 14 with App Router and TypeScript

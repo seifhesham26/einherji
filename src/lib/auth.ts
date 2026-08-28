@@ -4,9 +4,10 @@ import { Resend } from "resend";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { users, sessions, accounts, verifications } from "@/lib/db/schema";
+import { ARE_SIGNUPS_OPEN } from "@/lib/signups";
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
-const FROM_EMAIL = env.RESEND_FROM_EMAIL ?? "AI Job Hunter <noreply@yourdomain.com>";
+const FROM_EMAIL = env.RESEND_FROM_EMAIL ?? "Einherji <noreply@yourdomain.com>";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -22,6 +23,10 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
+    // Where signups are actually closed. The register page stops rendering a form
+    // and the landing page stops offering one, but sign-up is a public HTTP route
+    // — anyone can POST to it directly, so the refusal has to live here.
+    disableSignUp: !ARE_SIGNUPS_OPEN,
     // Allow login before verification — users see a banner prompt instead of being blocked
     requireEmailVerification: false,
   },
@@ -35,7 +40,7 @@ export const auth = betterAuth({
       await resend.emails.send({
         from: FROM_EMAIL,
         to: user.email,
-        subject: "Verify your AI Job Hunter email",
+        subject: "Verify your Einherji email",
         html: `
           <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#fff;">
             <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111;">Verify your email</h2>

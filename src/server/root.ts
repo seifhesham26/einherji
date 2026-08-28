@@ -3,6 +3,8 @@ import { bucketsRouter } from "@/buckets/buckets.router";
 import { companiesRouter } from "@/companies/companies.router";
 import { credentialsRouter } from "@/credentials/credentials.router";
 import { criteriaRouter } from "@/criteria/criteria.router";
+import { jobDocumentsRouter } from "@/job-documents/job-documents.router";
+import { jobInsightsRouter } from "@/job-insights/job-insights.router";
 import { jobsRouter } from "@/jobs/jobs.router";
 import { leadsRouter } from "@/leads/leads.router";
 import { messagesRouter } from "@/messages/messages.router";
@@ -18,6 +20,8 @@ export const appRouter = createTRPCRouter({
   companies: companiesRouter,
   credentials: credentialsRouter,
   criteria: criteriaRouter,
+  jobDocuments: jobDocumentsRouter,
+  jobInsights: jobInsightsRouter,
   jobs: jobsRouter,
   leads: leadsRouter,
   messages: messagesRouter,

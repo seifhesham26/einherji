@@ -6,6 +6,9 @@ export const usageActionValues = [
   "parse_cv",
   "find_managers",
   "scrape",
+  "extract_job_facts",
+  "generate_fit_report",
+  "generate_document",
 ] as const;
 
 export const usageActionSchema = z.enum(usageActionValues);
@@ -28,6 +31,14 @@ export const DAILY_QUOTAS: Record<UsageAction, number> = {
   find_managers: 25,
   // Cheap in money, but the real cost is the IP being blocked by job boards.
   scrape: 50,
+  // The cheapest completion in the app — a small flat object from a short
+  // prompt — and the only one run in batches, so the ceiling is the highest.
+  extract_job_facts: 200,
+  // A long prompt and a long answer, asked for one job at a time.
+  generate_fit_report: 50,
+  // Cover letters, application answers, CV bullets and prep packs share one
+  // allowance: same cost, same decision.
+  generate_document: 50,
 };
 
 export const QUOTA_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -38,4 +49,7 @@ export const USAGE_ACTION_LABELS: Record<UsageAction, string> = {
   parse_cv: "CV parses",
   find_managers: "hiring-manager searches",
   scrape: "scrapes",
+  extract_job_facts: "job analyses",
+  generate_fit_report: "fit reports",
+  generate_document: "generated documents",
 };

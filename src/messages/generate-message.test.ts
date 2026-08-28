@@ -30,6 +30,11 @@ vi.mock("@/criteria/criteria.db", () => ({
 vi.mock("@/jobs/jobs.db", () => ({
   getJobById: (...args: unknown[]) => getJobById(...args),
 }));
+// Read for the account's own AI keys. None here, so the completion bills the
+// server key — which is the fallback path, and the one these tests exercise.
+vi.mock("@/settings/settings.db", () => ({
+  getSettingsByUserId: vi.fn(async () => null),
+}));
 vi.mock("@/usage/usage.service", () => ({
   consumeQuota: (...args: unknown[]) => consumeQuota(...args),
 }));

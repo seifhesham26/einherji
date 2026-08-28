@@ -75,6 +75,18 @@ function buildJobFilters(userId: string, input: Omit<GetJobsInput, "limit" | "cu
   if (input.workTypes?.length) conditions.push(inArray(jobs.workType, input.workTypes));
   if (input.isRemote !== undefined) conditions.push(eq(jobs.isRemote, input.isRemote));
   if (input.minScore !== undefined) conditions.push(gte(jobs.score, input.minScore));
+  if (input.seniorities?.length) conditions.push(inArray(jobs.seniority, input.seniorities));
+  if (input.remotePolicies?.length) {
+    conditions.push(inArray(jobs.remotePolicy, input.remotePolicies));
+  }
+  if (input.minAnnualSalary !== undefined) {
+    // The top of the quoted band, falling back to the bottom when only one
+    // figure was given. A 50-70k role satisfies a 60k floor — filtering on the
+    // minimum would drop exactly the roles where the range is the point.
+    conditions.push(
+      sql`coalesce(${jobs.salaryMaxAnnual}, ${jobs.salaryMinAnnual}) >= ${input.minAnnualSalary}`,
+    );
+  }
   if (input.postedWithinDays !== undefined) {
     // Resolved here rather than in the client so a saved view's "this week"
     // stays this week — the alternative is a stored date that quietly ages.

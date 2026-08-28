@@ -1,4 +1,4 @@
-# AI Job Hunter — Full System Documentation
+# Einherji — Full System Documentation
 
 > ⚠️ **This document is out of date.** It describes the *pre-build plan*, not the shipped app.
 > Next.js 14 → actually 16.2.6 · Clerk/NextAuth → actually Better Auth · REST route handlers → actually tRPC ·

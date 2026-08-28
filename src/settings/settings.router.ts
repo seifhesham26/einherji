@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import {
   updateProfileSchema,
   updateIntegrationsSchema,
+  updateAiKeysSchema,
   updateJobSourcesSchema,
   updateDigestSchema,
   updateTelegramSchema,
@@ -12,6 +13,7 @@ import {
   getUserSettings,
   updateProfile,
   updateIntegrations,
+  updateAiKeys,
   updateJobSources,
   updateDigest,
   connectTelegram,
@@ -48,6 +50,12 @@ export const settingsRouter = createTRPCRouter({
     .input(updateTelegramSchema)
     .mutation(async ({ input, ctx }) => {
       return connectTelegram(db, ctx.session.user.id, input);
+    }),
+
+  updateAiKeys: protectedProcedure
+    .input(updateAiKeysSchema)
+    .mutation(async ({ input, ctx }) => {
+      return updateAiKeys(db, ctx.session.user.id, input);
     }),
 
   updateJobSources: protectedProcedure

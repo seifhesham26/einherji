@@ -22,6 +22,9 @@ export const savedViewFiltersSchema = getJobsSchema
     postedWithinDays: true,
     search: true,
     sort: true,
+    seniorities: true,
+    remotePolicies: true,
+    minAnnualSalary: true,
   })
   .partial()
   // .partial() makes a field optional but leaves its .default() in place, so the

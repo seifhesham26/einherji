@@ -28,7 +28,12 @@ import JobCard from "./job-card";
 import JobsTable from "./jobs-table";
 import JobsSelectionBar from "./jobs-selection-bar";
 import JobStatusFilter from "./job-status-filter";
-import JobFiltersBar, { countActiveFilters, type JobFilterValues } from "./job-filters-bar";
+import JobFiltersBar, {
+  countActiveFilters,
+  usesExtractedFacts,
+  type JobFilterValues,
+} from "./job-filters-bar";
+import AnalyseBacklogButton from "./analyse-backlog-button";
 import JobDetailPanel from "./job-detail-panel";
 import DismissReasonDialog from "./dismiss-reason-dialog";
 import KeyboardShortcutsHelp from "./keyboard-shortcuts-help";
@@ -307,6 +312,9 @@ export default function JobsList() {
       minScore: savedFilters.minScore,
       postedWithinDays: savedFilters.postedWithinDays,
       workTypes: savedFilters.workTypes,
+      seniorities: savedFilters.seniorities,
+      remotePolicies: savedFilters.remotePolicies,
+      minAnnualSalary: savedFilters.minAnnualSalary,
     });
     setSelectedIds(new Set());
   }
@@ -400,6 +408,8 @@ export default function JobsList() {
 
       <ScrapeRunPanel isStarting={scrapeJobs.isPending} />
 
+      <AnalyseBacklogButton bucketId={bucketId ?? undefined} />
+
       <SavedViewsBar
         activeViewId={activeViewId}
         onSelect={applySavedView}
@@ -489,15 +499,27 @@ export default function JobsList() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <JobFiltersBar
-            values={filters}
-            onChange={(next) => {
-              setFilters(next);
-              // The view no longer describes what's on screen, so nothing should
-              // be lit as though it does.
-              setActiveViewId(null);
-            }}
-          />
+          <div className="space-y-1.5">
+            <JobFiltersBar
+              values={filters}
+              onChange={(next) => {
+                setFilters(next);
+                // The view no longer describes what's on screen, so nothing should
+                // be lit as though it does.
+                setActiveViewId(null);
+              }}
+            />
+
+            {/* Said out loud, because otherwise a seniority filter that returns
+                four jobs out of six hundred reads as a broken filter rather than
+                as six hundred postings nobody has read yet. */}
+            {usesExtractedFacts(filters) && (
+              <p className="text-[11px] text-muted-foreground">
+                Seniority, arrangement and salary come from analysing a posting — unanalysed
+                jobs can&apos;t match them.
+              </p>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             {/* Two separate clears. "Tidy up what I've finished with" is a routine

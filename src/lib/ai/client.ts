@@ -1,5 +1,4 @@
-import OpenAI from "openai";
-import { env } from "@/lib/env";
+import { resolveAiClient, type AiCredentials } from "./resolve-ai-client";
 import type { MessageTemplate } from "@/messages/messages.validators";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -7,30 +6,6 @@ import type { MessageTemplate } from "@/messages/messages.validators";
 const JOB_DESCRIPTION_EXCERPT_LENGTH = 800;
 const LEAD_ABOUT_EXCERPT_LENGTH = 400;
 const LEAD_POSTS_EXCERPT_LENGTH = 300;
-
-// ─── Clients ──────────────────────────────────────────────────────────────────
-
-// OpenRouter — free + paid models via one key
-const openrouterClient = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: env.OPENROUTER_API_KEY,
-  defaultHeaders: {
-    "HTTP-Referer": env.NEXT_PUBLIC_APP_URL,
-    "X-Title": "AI Job Hunter",
-  },
-});
-
-// Direct OpenAI — used when model is gpt-* and OPENAI_API_KEY is set
-const openaiClient = env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
-  : null;
-
-// gpt-* models go direct to OpenAI if a key is present, else fall back to OpenRouter
-export function getClient(model: string): OpenAI {
-  const isOpenAIModel = model.startsWith("gpt-") || model.startsWith("o1-") || model.startsWith("o3-");
-  if (isOpenAIModel && openaiClient) return openaiClient;
-  return openrouterClient;
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,12 +60,16 @@ export interface GenerateMessageInput {
   jobUrl?: string;
   resumeText?: string;
   userSkills?: string[];
+
+  // Whose key pays. Omitted falls back to the server key, which is right for a
+  // single-user install and wrong the moment a second person signs up.
+  credentials?: AiCredentials;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export async function generateOutreachMessage(input: GenerateMessageInput): Promise<string> {
-  const client = getClient(input.model);
+  const client = resolveAiClient(input.model, input.credentials);
 
   const response = await client.chat.completions.create({
     model: input.model,

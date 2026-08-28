@@ -10,6 +10,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { WorkType } from "@/lib/scrapers/job-source.types";
+import {
+  REMOTE_POLICY_LABELS,
+  SENIORITY_LABELS,
+  remotePolicyValues,
+  seniorityLevelValues,
+  type RemotePolicy,
+  type SeniorityLevel,
+} from "@/job-insights/job-insights.validators";
 
 /**
  * The filters that narrow the list beyond its status.
@@ -25,6 +33,12 @@ export interface JobFilterValues {
   minScore?: number;
   postedWithinDays?: number;
   workTypes?: WorkType[];
+  // The three that only match analysed postings. Marked in the UI, because a
+  // filter that silently excludes everything unread is indistinguishable from a
+  // filter that is broken.
+  seniorities?: SeniorityLevel[];
+  remotePolicies?: RemotePolicy[];
+  minAnnualSalary?: number;
 }
 
 interface JobFiltersBarProps {
@@ -37,6 +51,9 @@ interface JobFiltersBarProps {
 const ANY = "any";
 
 const SCORE_THRESHOLDS = [80, 70, 60, 40];
+// Round numbers in whatever currency the postings quote. No conversion happens,
+// so this is a threshold against the figure as written.
+const SALARY_THRESHOLDS = [200_000, 120_000, 80_000, 60_000, 40_000];
 const POSTED_WINDOWS: { days: number; label: string }[] = [
   { days: 1, label: "Today" },
   { days: 3, label: "Last 3 days" },
@@ -63,9 +80,24 @@ function parseOptionalNumber(value: string | null): number | undefined {
 }
 
 export function countActiveFilters(values: JobFilterValues): number {
-  return [values.isRemote, values.minScore, values.postedWithinDays, values.workTypes].filter(
-    (value) => value !== undefined,
-  ).length;
+  return [
+    values.isRemote,
+    values.minScore,
+    values.postedWithinDays,
+    values.workTypes,
+    values.seniorities,
+    values.remotePolicies,
+    values.minAnnualSalary,
+  ].filter((value) => value !== undefined).length;
+}
+
+/** True when a filter can only match postings that have been analysed. */
+export function usesExtractedFacts(values: JobFilterValues): boolean {
+  return (
+    values.seniorities !== undefined ||
+    values.remotePolicies !== undefined ||
+    values.minAnnualSalary !== undefined
+  );
 }
 
 export default function JobFiltersBar({ values, onChange }: JobFiltersBarProps) {
@@ -150,6 +182,74 @@ export default function JobFiltersBar({ values, onChange }: JobFiltersBarProps) 
           {(Object.keys(WORK_TYPE_LABELS) as WorkType[]).map((workType) => (
             <SelectItem key={workType} value={workType}>
               {WORK_TYPE_LABELS[workType]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* ── Filters on what the AI read out of the description ── */}
+      <Select
+        value={values.seniorities?.[0] ?? ANY}
+        onValueChange={(value) =>
+          update({
+            seniorities: value === ANY || value === null ? undefined : [value as SeniorityLevel],
+          })
+        }
+      >
+        <SelectTrigger size="sm" className="w-[140px]" aria-label="Seniority">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ANY}>Any seniority</SelectItem>
+          {seniorityLevelValues
+            // "Not stated" is what an analysed posting says when it couldn't
+            // tell. Offering it as a filter would return exactly the rows the
+            // filter exists to skip past.
+            .filter((level) => level !== "unknown")
+            .map((level) => (
+              <SelectItem key={level} value={level}>
+                {SENIORITY_LABELS[level]}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={values.remotePolicies?.[0] ?? ANY}
+        onValueChange={(value) =>
+          update({
+            remotePolicies:
+              value === ANY || value === null ? undefined : [value as RemotePolicy],
+          })
+        }
+      >
+        <SelectTrigger size="sm" className="w-[150px]" aria-label="What the posting says about remote">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ANY}>Any arrangement</SelectItem>
+          {remotePolicyValues
+            .filter((policy) => policy !== "unknown")
+            .map((policy) => (
+              <SelectItem key={policy} value={policy}>
+                {REMOTE_POLICY_LABELS[policy]}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={values.minAnnualSalary === undefined ? ANY : String(values.minAnnualSalary)}
+        onValueChange={(value) => update({ minAnnualSalary: parseOptionalNumber(value) })}
+      >
+        <SelectTrigger size="sm" className="w-[150px]" aria-label="Minimum salary">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ANY}>Any salary</SelectItem>
+          {SALARY_THRESHOLDS.map((threshold) => (
+            <SelectItem key={threshold} value={String(threshold)}>
+              {threshold.toLocaleString()}+ a year
             </SelectItem>
           ))}
         </SelectContent>

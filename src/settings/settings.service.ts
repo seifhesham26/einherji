@@ -9,6 +9,7 @@ import type {
   UpdateIntegrationsInput,
   UpdateJobSourcesInput,
   UpdateProfileInput,
+  UpdateAiKeysInput,
 } from "./settings.validators";
 
 /**
@@ -24,7 +25,14 @@ export async function getUserSettings(db: Database, userId: string) {
   const settings = await getSettingsByUserId(db, userId);
   if (!settings) return null;
 
-  const { apifyApiToken, scrapingProxyApiKey, telegramBotToken, ...safeSettings } = settings;
+  const {
+    apifyApiToken,
+    scrapingProxyApiKey,
+    telegramBotToken,
+    openrouterApiKey,
+    openaiApiKey,
+    ...safeSettings
+  } = settings;
 
   return {
     ...safeSettings,
@@ -32,7 +40,37 @@ export async function getUserSettings(db: Database, userId: string) {
     apifyApiTokenPreview: apifyApiToken ? maskSecret(apifyApiToken) : null,
     hasScrapingProxyApiKey: Boolean(scrapingProxyApiKey),
     hasTelegramBotToken: Boolean(telegramBotToken),
+    hasOpenrouterApiKey: Boolean(openrouterApiKey),
+    hasOpenaiApiKey: Boolean(openaiApiKey),
+    openrouterApiKeyPreview: openrouterApiKey ? maskSecret(openrouterApiKey) : null,
+    openaiApiKeyPreview: openaiApiKey ? maskSecret(openaiApiKey) : null,
   };
+}
+
+/**
+ * Saves the account's own AI keys.
+ *
+ * Blank means "leave it as it is"; null means "remove it". The form cannot
+ * pre-fill a saved key — it never reaches the browser — so treating a blank
+ * field as a deletion would wipe the key every time the page was saved for any
+ * other reason.
+ */
+export async function updateAiKeys(db: Database, userId: string, input: UpdateAiKeysInput) {
+  const changes: { openrouterApiKey?: string | null; openaiApiKey?: string | null } = {};
+
+  if (input.openrouterApiKey === null) changes.openrouterApiKey = null;
+  else if (input.openrouterApiKey) changes.openrouterApiKey = input.openrouterApiKey;
+
+  if (input.openaiApiKey === null) changes.openaiApiKey = null;
+  else if (input.openaiApiKey) changes.openaiApiKey = input.openaiApiKey;
+
+  if (Object.keys(changes).length > 0) {
+    await upsertUserSettings(db, userId, changes);
+  }
+
+  // Re-read through the same filter the client already uses, so a mutation
+  // response cannot become a second way to leak a key.
+  return getUserSettings(db, userId);
 }
 
 export async function updateProfile(db: Database, userId: string, input: UpdateProfileInput) {
@@ -93,7 +131,7 @@ export async function connectTelegram(db: Database, userId: string, input: Updat
   try {
     await sendTelegramMessage(
       { botToken, chatId },
-      "<b>AI Job Hunter</b> is connected. Your daily digest will arrive here.",
+      "<b>Einherji</b> is connected. Your daily digest will arrive here.",
     );
   } catch (error) {
     throw new TRPCError({

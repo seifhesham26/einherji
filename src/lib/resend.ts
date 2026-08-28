@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 // logging, which keeps local development working with no third-party account.
 export const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
-export const FROM_EMAIL = env.RESEND_FROM_EMAIL ?? "AI Job Hunter <onboarding@resend.dev>";
+export const FROM_EMAIL = env.RESEND_FROM_EMAIL ?? "Einherji <onboarding@resend.dev>";
 
 export function isEmailConfigured(): boolean {
   return resend !== null;

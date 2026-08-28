@@ -13,6 +13,10 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
+  /* The marketing surface's two faces. Scoped to it by usage, not by cascade:
+     the app chrome never reaches for either. */
+  --font-display: var(--font-display);
+  --font-console: var(--font-console);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -132,81 +136,104 @@
   }
 }
 
-/* ─── Landing page animations ───────────────────────────────────────────────── */
+/* ─── The console surface ───────────────────────────────────────────────────
+   The marketing page is one locked dark theme rather than a themed surface:
+   it is a picture of an instrument, and an instrument that repaints itself
+   white is not one. Every colour it uses is declared here, so nothing on it
+   borrows a token from the app's own palette and drifts when that changes.
 
-@keyframes gradient-x {
-  0%, 100% { background-position: 0% 50%; }
-  50%       { background-position: 100% 50%; }
+   Ground is blue-biased rather than neutral black. Pure #000 has no depth and
+   nothing reads as lit against it. */
+
+.console {
+  --console-ground: #06080c;
+  --console-panel: #0b0f16;
+  --console-raised: #111826;
+  --console-rule: #1b2431;
+  --console-ink: #e4eaf2;
+  --console-dim: #78859a;
+  /* The one accent. Sodium flare, and it means heat: a high score, a live key,
+     the primary action. Nothing else on the page is coloured. */
+  --console-signal: #ff5f1f;
+
+  /* The app's own semantic tokens, remapped onto this palette. Every shadcn
+     component rendered inside a console surface - the auth forms are the whole
+     reason this exists - then wears it without a single per-component override,
+     and without the app's chrome knowing anything about the console.
+
+     Sharp corners throughout: an instrument does not have rounded fields, and
+     one radius system per surface is the difference between deliberate and
+     assembled. */
+  --background: var(--console-ground);
+  --foreground: var(--console-ink);
+  --card: var(--console-panel);
+  --card-foreground: var(--console-ink);
+  --popover: var(--console-panel);
+  --popover-foreground: var(--console-ink);
+  --primary: var(--console-signal);
+  --primary-foreground: #06080c;
+  --secondary: var(--console-raised);
+  --secondary-foreground: var(--console-ink);
+  --muted: var(--console-raised);
+  --muted-foreground: var(--console-dim);
+  --accent: var(--console-raised);
+  --accent-foreground: var(--console-ink);
+  --border: var(--console-rule);
+  --input: var(--console-rule);
+  --ring: var(--console-signal);
+  /* Lighter than the app's red, because this one has to clear AA against a
+     near-black ground rather than a white one. */
+  --destructive: #ff6b6b;
+  --radius: 0px;
+
+  background-color: var(--console-ground);
+  color: var(--console-ink);
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  33%       { transform: translateY(-18px) rotate(0.5deg); }
-  66%       { transform: translateY(-8px) rotate(-0.5deg); }
+/* The drafting grid the whole page sits on. Faint enough to read as a surface
+   rather than as lines, and fixed so it does not scroll with the content. */
+.console-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.022) 1px, transparent 1px);
+  background-size: 64px 64px;
 }
 
-@keyframes float-slow {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-12px); }
+/* Wide and heavy. The width axis is the point: it is what separates this from
+   any other grotesque set very large. */
+.console-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-variation-settings: "wdth" 118;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+.console-mono {
+  font-family: var(--font-console), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(28px); }
-  to   { opacity: 1; transform: translateY(0); }
+@keyframes console-reveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
 }
 
-@keyframes scale-in {
-  from { opacity: 0; transform: scale(0.92); }
-  to   { opacity: 1; transform: scale(1); }
+/* Applied by the reveal hook once a section is actually on screen, so the
+   sequence tracks the reader rather than running past them on load. */
+.console-revealed {
+  animation: console-reveal 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes shimmer {
-  from { transform: translateX(-100%) skewX(-12deg); }
-  to   { transform: translateX(200%) skewX(-12deg); }
+/* The one thing that moves on its own: the key that just fired in the hero
+   demo. It is feedback for a keystroke, which is the whole subject. */
+@keyframes console-strike {
+  0%   { background-color: var(--console-signal); color: #06080c; }
+  100% { background-color: transparent; }
 }
 
-@keyframes pulse-slow {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.5; }
-}
-
-@keyframes orbit {
-  from { transform: rotate(0deg) translateX(140px) rotate(0deg); }
-  to   { transform: rotate(360deg) translateX(140px) rotate(-360deg); }
-}
-
-.animate-gradient-x {
-  background-size: 200%;
-  animation: gradient-x 4s ease infinite;
-}
-
-.animate-float {
-  animation: float 7s ease-in-out infinite;
-}
-
-.animate-float-slow {
-  animation: float-slow 10s ease-in-out infinite;
-}
-
-.animate-marquee {
-  animation: marquee 28s linear infinite;
-}
-
-.animate-fade-up {
-  animation: fade-up 0.6s ease-out both;
-}
-
-.animate-scale-in {
-  animation: scale-in 0.5s ease-out both;
-}
-
-.animate-shimmer {
-  animation: shimmer 2.5s ease-in-out infinite;
+.console-strike {
+  animation: console-strike 0.5s ease-out;
 }
 
 .scrollbar-none {
@@ -237,9 +264,11 @@
 }
 
 /* ─── Reduced motion ────────────────────────────────────────────────────────
-   The landing page floats, orbits and marquees indefinitely. For anyone who has
-   asked their OS for less of that, indefinite motion is not decoration — it can
-   be genuinely unpleasant. Everything still renders, it just stops moving. */
+   The console reveals sections as they arrive and strikes a key in the hero
+   demo. For anyone who has asked their OS for less of that, motion is not
+   decoration. Everything still renders, it just stops moving — and the demo
+   holds a mid-run state rather than a blank one, so the page still shows what
+   it is for. */
 
 @media (prefers-reduced-motion: reduce) {
   *,
