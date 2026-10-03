@@ -7,6 +7,10 @@ const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   OPENROUTER_API_KEY: z.string().min(1),
   OPENAI_API_KEY: z.string().optional(),
+  // Exact, comma-separated model IDs approved for each server-funded provider.
+  // Unset or empty lists disable server funding without disabling personal keys.
+  OPENAI_FUNDED_MODELS: z.string().optional(),
+  OPENROUTER_FUNDED_MODELS: z.string().optional(),
   BETTER_AUTH_SECRET: z.string().min(1),
   BETTER_AUTH_URL: z.string().url(),
   NEXT_PUBLIC_APP_URL: z.string().url(),

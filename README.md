@@ -42,6 +42,7 @@ Rename `.env.local.example` to `.env.local` (or create a new `.env.local` file) 
 #### AI (OpenRouter)
 1. Go to [OpenRouter.ai](https://openrouter.ai), create an account, and generate an API key.
 2. Set `OPENROUTER_API_KEY=sk-or-...`
+3. Server-funded AI is disabled until exact model IDs are configured in `OPENROUTER_FUNDED_MODELS` or `OPENAI_FUNDED_MODELS`. Compatible personal keys take priority. See [AI funding policy](docs/AI-FUNDING-POLICY.md) for configuration and routing rules.
 
 #### Scraping (Apify)
 1. Go to [Apify Console](https://console.apify.com).

@@ -1,14 +1,12 @@
 import OpenAI from "openai";
+import { TRPCError } from "@trpc/server";
 import { env } from "@/lib/env";
 
 /**
  * Which account's key pays for a completion.
  *
- * Every other third-party key in this app is per-account and encrypted at rest.
- * The AI keys were the exception: one server-wide key billed for everyone, which
- * works exactly until a second person logs in and then silently doesn't. The
- * server key stays as the fallback — it is the right answer for a single-user
- * install — but an account that supplies its own now pays its own bill.
+ * Compatible personal keys take priority. Server keys can only pay for models
+ * explicitly approved in that provider's funding allowlist.
  */
 
 export interface AiCredentials {
@@ -22,6 +20,10 @@ const OPENAI_MODEL_PREFIXES = ["gpt-", "o1-", "o3-", "o4-"];
 
 function isOpenAIModel(model: string): boolean {
   return OPENAI_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
+}
+
+function isFundedModel(model: string, allowlist: string | undefined): boolean {
+  return (allowlist ?? "").split(",").some((entry) => entry.trim() === model && model.length > 0);
 }
 
 // An OpenAI client is a thin wrapper around fetch, but it is built on every
@@ -60,16 +62,31 @@ function directOpenAIClient(apiKey: string): OpenAI {
 /**
  * The client to run this model through, for this account.
  *
- * A gpt-* model prefers a direct OpenAI key when one is available — it is
- * cheaper than the same model through OpenRouter — and otherwise falls back to
- * OpenRouter, which carries them too.
+ * Native OpenAI model IDs prefer personal direct OpenAI, then personal
+ * OpenRouter. Only after those options do provider-specific server allowlists
+ * apply. Provider failures never trigger a switch to a server-funded key.
  */
 export function resolveAiClient(model: string, credentials: AiCredentials = {}): OpenAI {
-  const openaiKey = credentials.openaiApiKey?.trim() || env.OPENAI_API_KEY;
-  if (isOpenAIModel(model) && openaiKey) return directOpenAIClient(openaiKey);
+  const personalOpenaiKey = credentials.openaiApiKey?.trim();
+  if (isOpenAIModel(model) && personalOpenaiKey) return directOpenAIClient(personalOpenaiKey);
 
-  const openrouterKey = credentials.openrouterApiKey?.trim() || env.OPENROUTER_API_KEY;
-  return openRouterClient(openrouterKey);
+  const personalOpenrouterKey = credentials.openrouterApiKey?.trim();
+  if (personalOpenrouterKey) return openRouterClient(personalOpenrouterKey);
+
+  if (isOpenAIModel(model) && isFundedModel(model, env.OPENAI_FUNDED_MODELS)) {
+    const serverKey = env.OPENAI_API_KEY?.trim();
+    if (serverKey) return directOpenAIClient(serverKey);
+  }
+
+  if (isFundedModel(model, env.OPENROUTER_FUNDED_MODELS)) {
+    const serverKey = env.OPENROUTER_API_KEY?.trim();
+    if (serverKey) return openRouterClient(serverKey);
+  }
+
+  throw new TRPCError({
+    code: "FORBIDDEN",
+    message: "This model is not enabled for server-funded AI. Choose an enabled model or add a compatible personal API key.",
+  });
 }
 
 /** Test seam — the cache is keyed by secret, so it must be clearable. */
