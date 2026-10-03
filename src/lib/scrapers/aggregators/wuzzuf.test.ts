@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WUZZUF_JOB_PAGE_HTML, WUZZUF_SITEMAP_XML } from "./__fixtures__/wuzzuf-job-page";
 import { parseSitemapUrls, parseWuzzufJobPage, selectMatchingUrls } from "./wuzzuf";
 
@@ -52,7 +52,17 @@ describe("selectMatchingUrls", () => {
 });
 
 describe("parseWuzzufJobPage", () => {
-  const job = parseWuzzufJobPage(WUZZUF_JOB_PAGE_HTML, JOB_URL, SITEMAP_LASTMOD);
+  let job: ReturnType<typeof parseWuzzufJobPage>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-22T12:00:00.000Z"));
+    job = parseWuzzufJobPage(WUZZUF_JOB_PAGE_HTML, JOB_URL, SITEMAP_LASTMOD);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it("reads the job from the server-rendered markup", () => {
     expect(job).not.toBeNull();
@@ -88,13 +98,24 @@ describe("parseWuzzufJobPage", () => {
     expect(job?.description).not.toMatch(/^Job Description/);
   });
 
-  // The sitemap lastmod tracks the crawl, not the posting, so it's always today.
   it("prefers the posted age in the header over the sitemap lastmod", () => {
-    const nineteenDays = 19 * 86_400_000;
-    const sitemapDate = new Date(SITEMAP_LASTMOD).getTime();
-
     expect(job?.postedAt).toBeInstanceOf(Date);
-    expect(job!.postedAt!.getTime()).toBeLessThan(sitemapDate - nineteenDays / 2);
+    expect(job?.postedAt?.toISOString()).toBe("2026-08-03T12:00:00.000Z");
+  });
+
+  it.each([
+    ["2026-10-03T12:00:00.000Z", "2026-09-14T12:00:00.000Z"],
+    ["2030-01-20T12:00:00.000Z", "2030-01-01T12:00:00.000Z"],
+  ])("interprets the posted age relative to %s", (now, expected) => {
+    vi.setSystemTime(new Date(now));
+
+    const parsed = parseWuzzufJobPage(
+      WUZZUF_JOB_PAGE_HTML,
+      JOB_URL,
+      SITEMAP_LASTMOD,
+    );
+
+    expect(parsed?.postedAt?.toISOString()).toBe(expected);
   });
 
   it("keeps the category as a tag so it widens title matching", () => {
