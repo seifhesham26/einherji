@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-09
 
-**Status:** Design for review; implementation and database verification have not started.
+**Status:** Design approved for implementation planning on 2026-10-09; implementation and database verification have not started.
 
 **Scope:** The next slice of [SaaS Phase 2](../../SAAS-PHASED-PLAN.md). Shared monetary budgets remain a separate design.
 
@@ -104,4 +104,4 @@ Full default tests and TypeScript must pass after implementation; rerun lint and
 
 ## Next Step
 
-Review this spec, then write the focused implementation plan. The plan must distinguish implementable code/unit-test work from real-database verification awaiting a disposable target. Shared request ceilings, monetary reservations/reconciliation, verified accounts, pilot allowances, and bounded provider retries remain later Phase 2 work.
+Review the [focused implementation plan](../plans/2026-10-09-atomic-usage-quotas.md) before execution. It distinguishes implementable code/unit-test work from real-database verification awaiting a disposable target. Shared request ceilings, monetary reservations/reconciliation, verified accounts, pilot allowances, and bounded provider retries remain later Phase 2 work.

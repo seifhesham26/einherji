@@ -104,7 +104,7 @@ Provider free capacity is shared and subject to rate limits, so it supplements t
 
 **First slice completed 2026-10-03:** [AI funding policy and execution record](C:/dev/einherji/docs/AI-FUNDING-POLICY.md). All 20 resolver-policy tests pass; the full default suite passes 397 tests with 64 skips. Quota admission, shared budgets, account verification, and deployment model selection remain planned, so Phase 2 is not complete.
 
-**Next slice designed 2026-10-09:** [Atomic usage quotas design](C:/dev/einherji/docs/superpowers/specs/2026-10-09-atomic-usage-quotas-design.md). Uses explicit `ReadCommitted` Neon HTTP transactions with a lock before the usage check; preserves the current schema, limits, and history. The spec is ready for review, not implemented. Real concurrency verification still requires a disposable database.
+**Next slice planned 2026-10-09:** [Approved atomic usage quotas design](C:/dev/einherji/docs/superpowers/specs/2026-10-09-atomic-usage-quotas-design.md) and [implementation plan for review](C:/dev/einherji/docs/superpowers/plans/2026-10-09-atomic-usage-quotas.md). Uses explicit `ReadCommitted` Neon HTTP transactions with a lock before the usage check; preserves the current schema, limits, and history. Product implementation has not started. Real concurrency verification still requires a disposable database.
 
 ## Phase 3 - Account And Document Lifecycle
 
