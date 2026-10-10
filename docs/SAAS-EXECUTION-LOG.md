@@ -67,3 +67,39 @@ Verification: 432 existing tests passed, 66 skipped; two additional upload
 smoke tests passed. TypeScript and Next 16.4 production build passed. Lint had
 zero errors and the existing React Hook Form warning. Sentry's existing
 disableLogger deprecation remains.
+
+## 2026-10-10 - Bounded AI Attempts
+
+Purpose: one intentional user action must not silently become multiple billed
+attempts. All five text-completion paths use a shared request guard: at most
+64,000 UTF-8 prompt bytes (system and user text combined), 1,600 output tokens,
+one completion choice, no streaming/non-text payloads, and model IDs up to 200
+characters. Existing per-feature output caps remain lower where appropriate.
+
+Both personal and funded SDK clients disable automatic retries and use a
+30-second timeout. Request options repeat these bounds so a future caller's
+client settings cannot silently restore retries. No paid fallback was added.
+Timeouts/unknown outcomes are not refunded or retried automatically: the
+provider may have billed an attempt even if the response was lost.
+
+TDD evidence: five resolver checks initially failed (SDK default retries were
+two, and a mocked 500 caused three real SDK fetch attempts). Twelve request
+guard checks failed against the forwarding-only implementation; two more
+checks caught multiple choices/alternate output limits. They pass after the
+guard and retry changes. All provider responses in tests are mocked.
+
+Ruling: a hard total byte guard rejects oversized inputs instead of silently
+truncating additional user fields; existing CV/description excerpts stay intact.
+Cost: very large profiles or application questions need shortening. Thirty
+seconds may reject slow models; users can retry deliberately, consuming a new
+allowance. Limits are workload controls, not a monetary accounting guarantee.
+
+Still pending: shared request and conservative monetary reservations, verified
+funded accounts, funding eligibility before allowance consumption, smaller
+pilot quotas, durable batch execution and deployment model selection. Existing
+per-user limits are unchanged. This slice does not complete Phase 2.
+
+Verification: 457 default tests passed, 66 skipped; TypeScript, lint (one
+existing warning) and production build passed. Review: author self-review of
+all five call sites and guard bypasses, including alternate output limits,
+multiple choices, UTF-8 sizing and unknown provider failures. No live AI calls.

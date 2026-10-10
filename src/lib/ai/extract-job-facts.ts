@@ -1,4 +1,5 @@
 import { resolveAiClient, type AiCredentials } from "./resolve-ai-client";
+import { createCompletion } from "./create-completion";
 import { parseJsonResponse } from "./parse-json-response";
 import {
   extractedJobFactsSchema,
@@ -83,7 +84,7 @@ You read job postings and return structured facts about them. You are a parser, 
 export async function extractJobFacts(input: ExtractJobFactsInput): Promise<ExtractedJobFacts> {
   const client = resolveAiClient(input.model, input.credentials);
 
-  const response = await client.chat.completions.create({
+  const response = await createCompletion(client, {
     model: input.model,
     max_tokens: MAX_TOKENS,
     // Extraction is not a creative task, and the same posting should produce the

@@ -1,4 +1,5 @@
 import { resolveAiClient, type AiCredentials } from "./resolve-ai-client";
+import { createCompletion } from "./create-completion";
 import type { MessageTemplate } from "@/messages/messages.validators";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ export interface GenerateMessageInput {
 export async function generateOutreachMessage(input: GenerateMessageInput): Promise<string> {
   const client = resolveAiClient(input.model, input.credentials);
 
-  const response = await client.chat.completions.create({
+  const response = await createCompletion(client, {
     model: input.model,
     max_tokens: 500,
     messages: [

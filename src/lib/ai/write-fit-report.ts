@@ -1,4 +1,5 @@
 import { resolveAiClient, type AiCredentials } from "./resolve-ai-client";
+import { createCompletion } from "./create-completion";
 import { parseJsonResponse } from "./parse-json-response";
 import { fitReportSchema, type FitReport } from "@/job-insights/job-insights.validators";
 
@@ -75,7 +76,7 @@ not a cheerleader and not a gatekeeper.
 export async function writeFitReport(input: WriteFitReportInput): Promise<FitReport> {
   const client = resolveAiClient(input.model, input.credentials);
 
-  const response = await client.chat.completions.create({
+  const response = await createCompletion(client, {
     model: input.model,
     max_tokens: MAX_TOKENS,
     // Low but not zero: the verdicts should be stable, while the summary and the

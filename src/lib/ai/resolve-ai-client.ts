@@ -37,6 +37,8 @@ function openRouterClient(apiKey: string): OpenAI {
   if (cached) return cached;
 
   const client = new OpenAI({
+    maxRetries: 0,
+    timeout: 30_000,
     baseURL: "https://openrouter.ai/api/v1",
     apiKey,
     defaultHeaders: {
@@ -54,7 +56,7 @@ function directOpenAIClient(apiKey: string): OpenAI {
   const cached = clientCache.get(cacheKey);
   if (cached) return cached;
 
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, maxRetries: 0, timeout: 30_000 });
   clientCache.set(cacheKey, client);
   return client;
 }

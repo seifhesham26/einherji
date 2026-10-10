@@ -1,4 +1,5 @@
 import { resolveAiClient, type AiCredentials } from "./resolve-ai-client";
+import { createCompletion } from "./create-completion";
 import type { JobDocumentKind } from "@/job-documents/job-documents.validators";
 
 /**
@@ -115,7 +116,7 @@ company, and say so plainly if the posting reveals little.
 export async function writeJobDocument(input: WriteJobDocumentInput): Promise<string> {
   const client = resolveAiClient(input.model, input.credentials);
 
-  const response = await client.chat.completions.create({
+  const response = await createCompletion(client, {
     model: input.model,
     max_tokens: MAX_TOKENS[input.kind],
     // Warmer than the extraction calls: this is writing, and a letter generated

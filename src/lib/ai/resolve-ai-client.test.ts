@@ -133,4 +133,28 @@ describe("AI funding policy", () => {
     expect(second.apiKey).toBe("account-b");
     expect(first).not.toBe(second);
   });
+
+  it.each([
+    ["gpt-test", { openaiApiKey: "personal-openai" }],
+    ["vendor/test", { openrouterApiKey: "personal-router" }],
+    ["gpt-test", {}],
+    ["vendor/test", {}],
+  ])("bounds SDK attempts for %s with %j", (model, credentials) => {
+    env.OPENAI_FUNDED_MODELS = "gpt-test";
+    env.OPENROUTER_FUNDED_MODELS = "vendor/test";
+    const client = resolveAiClient(model, credentials);
+    expect(client.maxRetries).toBe(0);
+    expect(client.timeout).toBe(30_000);
+  });
+
+  it("does not retry a provider error or switch to server funding", async () => {
+    env.OPENAI_FUNDED_MODELS = "gpt-test";
+    const fetch = vi.fn<(url: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => new Response(JSON.stringify({ error: { message: "Unavailable" } }), {
+      status: 500, headers: { "content-type": "application/json" },
+    }));
+    const client = resolveAiClient("gpt-test", { openaiApiKey: "personal-openai" }).withOptions({ fetch });
+    await expect(client.chat.completions.create({ model: "gpt-test", messages: [{ role: "user", content: "test" }] })).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(new Headers(fetch.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer personal-openai");
+  });
 });

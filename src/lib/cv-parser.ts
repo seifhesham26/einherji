@@ -2,6 +2,7 @@ import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
 import { assertSafeUrl } from "@/lib/scrapers/http/assert-safe-url";
 
 import { resolveAiClient, type AiCredentials } from "@/lib/ai/resolve-ai-client";
+import { createCompletion } from "@/lib/ai/create-completion";
 
 // A CV is a document, not a data set. Anything past this is not a CV.
 const MAX_CV_BYTES = 15 * 1024 * 1024;
@@ -51,7 +52,7 @@ export async function extractCvFromUrl(
 
   let completion;
   try {
-    completion = await client.chat.completions.create({
+    completion = await createCompletion(client, {
       model: model,
       max_tokens: 1000,
       messages: [
