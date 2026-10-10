@@ -7,7 +7,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { setTimeout as delay } from "node:timers/promises";
 import * as schema from "@/lib/db/schema";
 import { consumeQuota, fetchQuotaStatus } from "./usage.service";
-import { DAILY_QUOTAS, QUOTA_WINDOW_MS, type UsageAction } from "./usage.validators";
+import { AI_USAGE_ACTIONS, DAILY_QUOTAS, QUOTA_WINDOW_MS, type UsageAction } from "./usage.validators";
 import { resolveUsageTestTarget } from "./__tests__/usage-test-target";
 
 config({ path: [".env.test.local", ".env.local", ".env"], quiet: true });
@@ -78,6 +78,39 @@ afterAll(async () => {
 });
 
 describeQuota("atomic usage quotas (writes only test-owned fixtures)", () => {
+  it("admits one of twenty accounts/actions competing for shared final capacity", async () => {
+    const ids: string[] = [];
+    for (let index = 0; index < 4; index++) ids.push(await newUser());
+    const [baseline] = await database().$client.query(`
+      SELECT count(*) AS used FROM usage_events WHERE action = ANY($1::usage_action[])
+        AND created_at >= clock_timestamp()::timestamp - interval '24 hours'
+    `, [[...AI_USAGE_ACTIONS]]);
+    const sharedAiLimit = Number(baseline.used) + 1;
+    const results = await Promise.allSettled(Array.from({ length: 20 }, (_, index) =>
+      consumeQuota(database(), ids[index % ids.length], index % 2 ? "parse_cv" : "generate_document", { sharedAiLimit }),
+    ));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    for (const result of results) {
+      if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "TOO_MANY_REQUESTS", message: expect.stringContaining("Shared AI capacity") });
+    }
+    const [saved] = await database().$client.query("SELECT count(*) AS used FROM usage_events WHERE user_id = ANY($1::text[])", [ids]);
+    expect(Number(saved.used)).toBe(1);
+  }, 120_000);
+
+  it("counts another account's AI action toward shared capacity without inserting on denial", async () => {
+    const first = await newUser();
+    const second = await newUser();
+    await seed(first, "generate_fit_report", 1);
+    const [baseline] = await database().$client.query(`
+      SELECT count(*) AS used FROM usage_events WHERE action = ANY($1::usage_action[])
+        AND created_at >= clock_timestamp()::timestamp - interval '24 hours'
+    `, [[...AI_USAGE_ACTIONS]]);
+    await expect(consumeQuota(database(), second, "parse_cv", { sharedAiLimit: Number(baseline.used) }))
+      .rejects.toMatchObject({ code: "TOO_MANY_REQUESTS", message: expect.stringContaining("Shared AI capacity") });
+    expect(await persisted(second, "parse_cv")).toBe(0);
+    expect(await persisted(first, "generate_fit_report")).toBe(1);
+  });
+
   it("admits exactly one of twenty contenders for the last unit", async () => {
     const id = await newUser();
     await seed(id, "parse_cv", DAILY_QUOTAS.parse_cv - 1);

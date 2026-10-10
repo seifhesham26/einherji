@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({ funding: vi.fn(), verified: vi.fn(), quota: vi
 vi.mock("@/lib/ai/resolve-ai-client", () => ({ resolveAiFundingSource: mocks.funding }));
 vi.mock("./usage.db", () => ({ isAccountVerified: mocks.verified }));
 vi.mock("./usage.service", () => ({ consumeQuota: mocks.quota }));
+vi.mock("@/lib/env", () => ({ env: { AI_SHARED_DAILY_REQUEST_LIMIT: 50 } }));
 import { admitAiAction } from "./ai-admission";
 
 const db = {} as Database;
@@ -35,7 +36,7 @@ describe("AI funding admission", () => {
   it("checks the database account before quota admission", async () => {
     await invoke();
     expect(mocks.verified).toHaveBeenCalledWith(db, "account-a");
-    expect(mocks.quota).toHaveBeenCalledWith(db, "account-a", "generate_fit_report");
+    expect(mocks.quota).toHaveBeenCalledWith(db, "account-a", "generate_fit_report", { sharedAiLimit: 50 });
     expect(mocks.verified.mock.invocationCallOrder[0]).toBeLessThan(mocks.quota.mock.invocationCallOrder[0]);
   });
 

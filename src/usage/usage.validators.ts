@@ -15,6 +15,10 @@ export const usageActionSchema = z.enum(usageActionValues);
 
 export type UsageAction = z.infer<typeof usageActionSchema>;
 
+export const AI_USAGE_ACTIONS: readonly UsageAction[] = [
+  "generate_message", "parse_cv", "extract_job_facts", "generate_fit_report", "generate_document",
+];
+
 /**
  * What each action costs, and how much of it a user gets per rolling 24 hours.
  *

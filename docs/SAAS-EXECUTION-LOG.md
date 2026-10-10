@@ -124,3 +124,50 @@ from client input or a potentially stale session. Cost: an extra database read
 for a funded request. A concurrent account-state change after this read remains
 possible; admission is not an account-revocation transaction. Shared spending
 controls are still required before deployment funding is enabled.
+
+## 2026-10-10 - Zero Paid AI And Shared Capacity
+
+Operator decision: $0 monthly platform AI spending. Only explicitly reviewed,
+exact allowlisted OpenRouter `:free` variants can use the platform key; paid
+OpenRouter and direct OpenAI platform requests fail even when allowlisted.
+Personal keys retain compatible routing and workload controls.
+
+Shared AI request capacity defaults to 50 attempts per rolling 24 hours,
+configurable with AI_SHARED_DAILY_REQUEST_LIMIT (0 pauses new AI). Admission
+takes a global advisory lock before the existing user/action lock, then counts
+all five AI action types across all accounts in a separate fresh-snapshot SQL
+statement. Shared and user limits govern the same usage-event insertion.
+Personal attempts count too. Denial inserts nothing; unknown database outcomes
+fail closed. No new database migration or funded provider request was needed.
+
+TDD: six shared admission checks initially failed; three zero-paid policy checks
+reproduced paid platform authorization before the fix. Nine live fixture-only
+checks passed, including shared final-slot competition across users/actions and
+the seven previous quota cases. Fixture cleanup asserts zero known fixture users.
+
+Ruling: under a $0 policy, disallow paid platform inference instead of introducing
+a paid-spend ledger with speculative prices. Cost: no server-paid models can be
+enabled without a separately reviewed monetary reservation implementation.
+Ruling: use one conservative shared limit for both platform and personal requests,
+not a guaranteed per-user allowance. Cost: personal-key users can exhaust shared
+capacity; user-facing availability must make that visible.
+
+Constraints: all production AI services must call the shared admission helper;
+drain old deployments that write only per-user quotas before activating funding.
+Global scans are acceptable for the closed small pilot; add a created_at index
+when retained usage volume warrants it. Existing account cascades delete usage
+history, so the later deletion flow must retain anonymous shared-capacity accounting
+through the active window before opening deletion/admission to the public.
+
+Availability check used the public model catalog, no credentials or user text.
+Both old Llama :free IDs are absent. Google Gemma 4 31B :free is a current zero-
+priced catalog candidate, served by Google AI Studio; its presence is not approval
+for CV data processing. No deployment key, allowlist, or stored model was changed.
+References: https://openrouter.ai/docs/guides/routing/model-variants/free and
+https://openrouter.ai/docs/api/reference/limits.
+
+Verification: 488 default tests passed, 68 skipped; nine live quota tests passed
+separately. TypeScript, lint (one existing warning), and Next 16.4 production
+build passed. Review: author self-review of lock ordering, fresh snapshots,
+bound parameters, shared denial metadata, zero capacity, malformed results and
+all current AI service callers. The public pilot remains unopened.

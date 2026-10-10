@@ -17,6 +17,41 @@ function boundary() {
 }
 
 describe("atomic quota admission", () => {
+  it("serializes shared AI capacity before the per-user lock and binds both limits", async () => {
+    const { db, transaction } = boundary();
+    transaction.mockResolvedValueOnce([[], [], [], [{ admitted: true, oldestAt: null, sharedExhausted: false }]]);
+    await expect(admitUsage(db, "account-a", "parse_cv", 20, { sharedAiLimit: 50 })).resolves.toEqual({ admitted: true, oldestAt: null, sharedExhausted: false });
+    const [queries] = transaction.mock.calls[0];
+    if (!Array.isArray(queries)) throw new Error("Expected query array");
+    expect(queries).toHaveLength(4);
+    const globalLock = queries[1].queryData;
+    const userLock = queries[2].queryData;
+    const admission = queries[3].queryData;
+    if (!("query" in globalLock) || !("query" in userLock) || !("query" in admission)) throw new Error("Expected bound queries");
+    expect(globalLock.params).toEqual(["einherji:ai-capacity:v1"]);
+    expect(userLock.params).toEqual([JSON.stringify(["einherji:usage-quota:v1", "account-a", "parse_cv"])]);
+    expect(admission.params).toContain(50);
+    expect(admission.query).toContain("shared_usage");
+  });
+
+  it("does not authorize work when shared AI capacity is empty", async () => {
+    const { db, transaction } = boundary();
+    await expect(admitUsage(db, "account-a", "parse_cv", 20, { sharedAiLimit: 0 })).resolves.toMatchObject({ admitted: false, sharedExhausted: true });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([-1, 1.5, NaN, Infinity])("rejects invalid shared limit %s before database work", async (sharedAiLimit) => {
+    const { db, transaction } = boundary();
+    await expect(admitUsage(db, "account-a", "parse_cv", 20, { sharedAiLimit })).rejects.toThrow("Invalid shared AI limit");
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "false", true])("fails closed on malformed shared admission metadata %s", async (sharedExhausted) => {
+    const { db, transaction } = boundary();
+    transaction.mockResolvedValueOnce([[], [], [], [{ admitted: true, oldestAt: null, sharedExhausted }]]);
+    await expect(admitUsage(db, "account-a", "parse_cv", 20, { sharedAiLimit: 50 })).rejects.toThrow("Invalid shared quota admission result");
+  });
+
   it("admits only after the transaction resolves", async () => {
     const { db, transaction } = boundary();
     let release!: (rows: Record<string, unknown>[][]) => void;

@@ -21,6 +21,11 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); });
 
 describe("quota service", () => {
+  it("explains shared exhaustion without claiming the user's own quota is exhausted", async () => {
+    admitUsage.mockResolvedValue({ admitted: false, oldestAt: null, sharedExhausted: true });
+    await expect(consumeQuota(db, "account-a", "parse_cv", { sharedAiLimit: 50 })).rejects.toThrow("Shared AI capacity");
+    expect(admitUsage).toHaveBeenCalledWith(db, "account-a", "parse_cv", 20, { sharedAiLimit: 50 });
+  });
   it("uses server-selected limits through atomic admission", async () => {
     await expect(consumeQuota(db, "account-a", "parse_cv")).resolves.toBeUndefined();
     expect(admitUsage).toHaveBeenCalledWith(db, "account-a", "parse_cv", DAILY_QUOTAS.parse_cv);

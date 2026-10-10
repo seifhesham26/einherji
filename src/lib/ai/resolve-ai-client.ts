@@ -88,9 +88,8 @@ function resolveAiConfiguration(model: string, credentials: AiCredentials): {
   const personalOpenrouterKey = credentials.openrouterApiKey?.trim();
   if (personalOpenrouterKey) return { apiKey: personalOpenrouterKey, provider: "openrouter", funding: "personal" };
 
-  if (isOpenAIModel(model) && isFundedModel(model, env.OPENAI_FUNDED_MODELS)) {
-    const serverKey = env.OPENAI_API_KEY?.trim();
-    if (serverKey) return { apiKey: serverKey, provider: "openai", funding: "platform" };
+  if (!model.endsWith(":free")) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Platform AI spending is capped at $0. Choose an enabled free model or use a compatible personal key." });
   }
 
   if (isFundedModel(model, env.OPENROUTER_FUNDED_MODELS)) {

@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
-import { admitUsage, getUsageInWindow } from "./usage.db";
+import { admitUsage, getUsageInWindow, type UsageAdmissionOptions } from "./usage.db";
 import {
   DAILY_QUOTAS,
   QUOTA_WINDOW_MS,
@@ -21,14 +21,18 @@ const MS_PER_MINUTE = 60_000;
  * Admission resolves only after its database transaction commits. Database
  * failures, including an unknown commit outcome, never authorize provider work.
  */
-export async function consumeQuota(db: Database, userId: string, action: UsageAction) {
+export async function consumeQuota(db: Database, userId: string, action: UsageAction, options?: UsageAdmissionOptions) {
   const limit = DAILY_QUOTAS[action];
-  const { admitted, oldestAt } = await admitUsage(db, userId, action, limit);
+  const { admitted, oldestAt, sharedExhausted } = options
+    ? await admitUsage(db, userId, action, limit, options)
+    : await admitUsage(db, userId, action, limit);
 
   if (!admitted) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",
-      message: `Daily limit reached — ${limit} ${USAGE_ACTION_LABELS[action]} per 24 hours. ${describeReset(oldestAt)}`,
+      message: sharedExhausted
+        ? "Shared AI capacity is exhausted or paused. Saved data remains available; try again later."
+        : `Daily limit reached — ${limit} ${USAGE_ACTION_LABELS[action]} per 24 hours. ${describeReset(oldestAt)}`,
     });
   }
 }

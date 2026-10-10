@@ -2,6 +2,37 @@
 
 **Implemented:** 2026-10-03, first slice of SaaS Phase 2.
 
+## Current Policy - 2026-10-10
+
+The operator selected a **$0 monthly platform AI spending ceiling**. Compatible
+personal keys still take priority. Without one, only exact allowlisted OpenRouter
+`:free` variants can use the server key. Direct OpenAI and paid OpenRouter
+platform funding are rejected even if a deployment allowlist mistakenly names
+them. `OPENAI_FUNDED_MODELS` no longer enables paid platform use.
+
+AI services check funded-account email verification before consuming an allowance.
+All AI requests, including personal-key attempts, also share
+`AI_SHARED_DAILY_REQUEST_LIMIT` (default 50, configurable 0-10,000) per rolling
+24 hours. Zero pauses AI work. Shared and per-user admission commit atomically
+under database advisory locks; rejected shared requests insert no usage event.
+Failures and unknown outcomes still count; no automatic refund or SDK retries.
+
+Each text completion is limited to 64,000 UTF-8 prompt bytes, 1,600 output tokens,
+one choice and 30 seconds. Existing smaller per-feature limits remain.
+Paid plugins/model fallbacks are not configured by any current call site.
+This is a zero-paid-inference policy, not paid-model cost estimation/reconciliation;
+introducing paid funding requires a new design and durable monetary reservations.
+
+Deployment allowlists remain unchanged/empty. The previous Llama free IDs were
+absent from the public OpenRouter catalog on 2026-10-10. Current replacement
+candidates require provider data-handling and quality review before activation.
+Free availability is not guaranteed capacity. Review provider-level key spending
+limits, data collection and fallback settings before enabling a server model.
+
+See [execution log](C:/dev/einherji/docs/SAAS-EXECUTION-LOG.md).
+The sections below preserve the original implementation contract and evidence;
+the current policy above supersedes their paid-funding and unfinished-control notes.
+
 ## Configuration
 
 The shared AI client resolver requires explicit authorization before using a server API key. Both provider allowlists are server-only, optional environment variables:

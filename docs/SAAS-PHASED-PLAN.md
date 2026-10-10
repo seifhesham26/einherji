@@ -90,11 +90,11 @@ The parser should continue to interpret a live listing's age relative to the act
 - [x] Centralize exact, provider-specific server funding allowlists; compatible personal keys take priority and unapproved platform funding is rejected before provider requests.
 - [ ] Select currently available models with acceptable pricing and data handling before enabling funded models. Allowlists are empty by default; deployment configuration has not been changed.
 - [ ] Give pilot users small allowances. Initial proposed daily maxima: one CV parse, two fit reports, two generated documents, one scrape, and no funded hiring-manager searches.
-- [ ] Add a configurable shared AI request ceiling and monthly funded-spend ceiling. Per-user maxima remain subject to shared availability and should not be presented as guaranteed provider capacity.
+- [x] Add a configurable atomic shared AI request ceiling. The operator chose a $0 monthly platform AI ceiling, enforced by rejecting paid platform inference even when mistakenly allowlisted. Per-user maxima remain subject to shared availability; paid-spend reservation/reconciliation is required before any future paid funding.
 - [x] Make per-user/action quota admission atomic under concurrency while preserving rolling limits and history.
-- [ ] Integrate shared budget reservations with atomic admission; individual quotas alone do not bound aggregate spending.
+- [x] Integrate shared request capacity with atomic user admission under the $0 policy. Paid monetary reservations remain out of scope while paid platform inference is prohibited.
 - [ ] Count provider attempts that may incur charges; bound prompt sizes, output tokens, retries, and batch sizes. Reserve a conservative cost before paid work and reconcile actual cost afterward.
-- [ ] Keep paid fallback disabled for pilot accounts initially. Customer-provided keys remain optional and do not bypass platform workload controls.
+- [x] Keep paid platform inference/fallback disabled under the operator's $0 policy. Customer-provided keys remain optional and do not bypass platform workload controls.
 - [x] Require a verified account before platform-funded AI actions, while allowing access to saved data and profile editing. Verified server-side before atomic user quota admission; no deployment funding enabled.
 - [ ] Show remaining allowances and clear exhausted-budget behavior in the active user surfaces.
 

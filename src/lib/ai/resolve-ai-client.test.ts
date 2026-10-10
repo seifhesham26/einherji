@@ -73,25 +73,21 @@ describe("AI funding policy", () => {
     })).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
   });
 
-  it("allows an explicitly funded direct OpenAI model", () => {
+  it("rejects platform-paid direct OpenAI even when explicitly allowlisted", () => {
     env.OPENAI_FUNDED_MODELS = "gpt-test";
-    const client = resolveAiClient("gpt-test");
-    expect(client.apiKey).toBe("server-openai");
-    expect(client.baseURL).toBe("https://api.openai.com/v1");
+    expect(() => resolveAiClient("gpt-test")).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
   });
 
   it("allows an explicitly funded OpenRouter model", () => {
-    env.OPENROUTER_FUNDED_MODELS = "vendor/test";
-    const client = resolveAiClient("vendor/test");
+    env.OPENROUTER_FUNDED_MODELS = "vendor/test:free";
+    const client = resolveAiClient("vendor/test:free");
     expect(client.apiKey).toBe("server-openrouter");
     expect(client.baseURL).toBe("https://openrouter.ai/api/v1");
   });
 
   it("keeps funding authorization provider-specific", () => {
-    env.OPENROUTER_FUNDED_MODELS = "gpt-test";
-    const client = resolveAiClient("gpt-test");
-    expect(client.apiKey).toBe("server-openrouter");
-    expect(client.baseURL).toBe("https://openrouter.ai/api/v1");
+    env.OPENAI_FUNDED_MODELS = "vendor/test:free";
+    expect(() => resolveAiClient("vendor/test:free")).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
   });
 
   it("does not fall back to an unapproved provider when an approved key is missing", () => {
@@ -103,8 +99,8 @@ describe("AI funding policy", () => {
   });
 
   it("trims comma-separated configuration entries", () => {
-    env.OPENROUTER_FUNDED_MODELS = " vendor/other, , vendor/test , ";
-    expect(resolveAiClient("vendor/test").apiKey).toBe("server-openrouter");
+    env.OPENROUTER_FUNDED_MODELS = " vendor/other:free, , vendor/test:free , ";
+    expect(resolveAiClient("vendor/test:free").apiKey).toBe("server-openrouter");
   });
 
   it.each(["vendor/test-paid", "vendor/test:free", "vendor/testing", "vendor/*"])(
@@ -118,10 +114,10 @@ describe("AI funding policy", () => {
   );
 
   it("rechecks authorization even when a server client is cached", () => {
-    env.OPENROUTER_FUNDED_MODELS = "vendor/test";
-    resolveAiClient("vendor/test");
+    env.OPENROUTER_FUNDED_MODELS = "vendor/test:free";
+    resolveAiClient("vendor/test:free");
     env.OPENROUTER_FUNDED_MODELS = "";
-    expect(() => resolveAiClient("vendor/test")).toThrow(
+    expect(() => resolveAiClient("vendor/test:free")).toThrow(
       expect.objectContaining({ code: "FORBIDDEN" }),
     );
   });
@@ -137,11 +133,11 @@ describe("AI funding policy", () => {
   it.each([
     ["gpt-test", { openaiApiKey: "personal-openai" }],
     ["vendor/test", { openrouterApiKey: "personal-router" }],
-    ["gpt-test", {}],
-    ["vendor/test", {}],
+    ["vendor/test:free", {}],
+    ["vendor/other:free", {}],
   ])("bounds SDK attempts for %s with %j", (model, credentials) => {
     env.OPENAI_FUNDED_MODELS = "gpt-test";
-    env.OPENROUTER_FUNDED_MODELS = "vendor/test";
+    env.OPENROUTER_FUNDED_MODELS = "vendor/test:free,vendor/other:free";
     const client = resolveAiClient(model, credentials);
     expect(client.maxRetries).toBe(0);
     expect(client.timeout).toBe(30_000);
@@ -160,11 +156,17 @@ describe("AI funding policy", () => {
 
   it("classifies the selected compatible key without exposing its secret", () => {
     env.OPENAI_FUNDED_MODELS = "gpt-test";
-    env.OPENROUTER_FUNDED_MODELS = "vendor/test";
+    env.OPENROUTER_FUNDED_MODELS = "vendor/test:free";
     expect(resolveAiFundingSource("gpt-test", { openaiApiKey: "personal" })).toBe("personal");
     expect(resolveAiFundingSource("vendor/test", { openrouterApiKey: "personal" })).toBe("personal");
-    expect(resolveAiFundingSource("gpt-test")).toBe("platform");
-    expect(resolveAiFundingSource("vendor/test", { openaiApiKey: "incompatible" })).toBe("platform");
+    expect(() => resolveAiFundingSource("gpt-test")).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
+    expect(resolveAiFundingSource("vendor/test:free", { openaiApiKey: "incompatible" })).toBe("platform");
     expect(() => resolveAiFundingSource("vendor/other")).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
+  });
+
+  it("rejects paid OpenRouter platform funding despite an allowlist mistake", () => {
+    env.OPENROUTER_FUNDED_MODELS = "vendor/paid";
+    expect(() => resolveAiClient("vendor/paid")).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
+    expect(resolveAiClient("vendor/paid", { openrouterApiKey: "personal-router" }).apiKey).toBe("personal-router");
   });
 });
