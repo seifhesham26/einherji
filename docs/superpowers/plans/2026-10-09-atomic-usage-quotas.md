@@ -10,7 +10,9 @@
 
 **Spec:** [Approved atomic-quota design](../specs/2026-10-09-atomic-usage-quotas-design.md).
 
-**Status:** Implementation plan for review. No product changes or database tests have been executed from this plan.
+**Status:** Executed and verified on 2026-10-10. See [the operating record](../../ATOMIC-USAGE-QUOTAS.md) for actual results and approved exceptions.
+
+**Execution amendments:** The user authorized main-database fixture tests and separately approved applying existing pending migration `0016`. The implemented target guard therefore also supports explicit `USAGE_TEST_ALLOW_MAIN_DATABASE=1`, and fixture cleanup matches both recorded IDs and fixture name/email. These amendments override the original disposable-only constraints below; no new migration file, quota value, or caller interface was changed.
 
 ## Global Constraints
 
@@ -53,7 +55,7 @@ Follow the repository's setup in that checkout. If dependencies are absent, use 
 
 **Interfaces:** Add `admitUsage(db: Pick<Database, "$client">, userId: string, action: UsageAction, limit: number): Promise<{ admitted: boolean; oldestAt: Date | null }>`. Preserve `consumeQuota(db, userId, action): Promise<void>`, `getUsageInWindow`, and the quota-status response shape. Remove the unrestricted `recordUsage` export once the service is updated.
 
-- [ ] **Step 1: Write database-boundary regression tests.**
+- [x] **Step 1: Write database-boundary regression tests.**
 
 Use the real installed Neon query builder; mock only its transaction transport. Queries are lazy, so constructing them must not issue a request. Block global fetch as a safety net and restore mocks/globals after each test.
 
@@ -152,7 +154,7 @@ describe("atomic quota admission", () => {
 });
 ```
 
-- [ ] **Step 2: Write service regressions.**
+- [x] **Step 2: Write service regressions.**
 
 Create a real Drizzle instance with the same fake Neon URL. Mock `./usage.db` with `admitUsage`, `getUsageInWindow`, and a legacy `recordUsage` stub so the old implementation can run during the red check. With the clock fixed to `2026-10-09T12:00:00.000Z`, add these tests; restore the clock after each test.
 
@@ -214,7 +216,7 @@ it("retains the quota-status fields and clamps remaining capacity", async () => 
 
 The setup resets both mocks, provides `{ used: 0, oldestAt: null }` for legacy reads, and makes the legacy writer resolve normally. Observe failure because the old service bypasses atomic admission, not because a mock is missing. Remove the unused legacy stub once the production writer is removed and the red result is recorded.
 
-- [ ] **Step 3: Observe the red check.**
+- [x] **Step 3: Observe the red check.**
 
 ```powershell
 rtk proxy npx --no-install vitest run src/usage/usage.db.test.ts src/usage/usage.service.test.ts
@@ -222,7 +224,7 @@ rtk proxy npx --no-install vitest run src/usage/usage.db.test.ts src/usage/usage
 
 Confirm the new helper is missing and the existing service ignores the atomic boundary. A mock/setup error is not a valid regression result.
 
-- [ ] **Step 4: Implement the database helper.**
+- [x] **Step 4: Implement the database helper.**
 
 Retain `getUsageInWindow`. Add the installed `createId` import and `QUOTA_WINDOW_MS` import, and replace `recordUsage` with:
 
@@ -280,11 +282,11 @@ export async function admitUsage(
 
 The installed SDK exposes parameterized query data for unit inspection; do not assert every SQL character. Real concurrency semantics are owned by Task 2. Keep one orienting comment explaining why lock acquisition and the conditional command are separate.
 
-- [ ] **Step 5: Wire the existing service.**
+- [x] **Step 5: Wire the existing service.**
 
 Replace the `recordUsage` import with `admitUsage`. In `consumeQuota`, replace its `windowStart`/`getUsageInWindow` admission read with `const { admitted, oldestAt } = await admitUsage(db, userId, action, limit);`, change `if (used >= limit)` to `if (!admitted)`, and remove the final standalone `recordUsage` call. Keep the existing `TRPCError` message, `describeReset`, and `fetchQuotaStatus` code. Replace the obsolete race-acceptance comment with the new confirmed-commit contract.
 
-- [ ] **Step 6: Verify and commit the self-contained change.**
+- [x] **Step 6: Verify and commit the self-contained change.**
 
 ```powershell
 rtk proxy npx --no-install vitest run src/usage/usage.db.test.ts src/usage/usage.service.test.ts
@@ -304,7 +306,7 @@ Require passing output and inspect the exact staged files before commit. Do not 
 
 **Interfaces:** `resolveUsageTestTarget(values: Record<string, string | undefined>): string | null` returns a disposable URL only after validation. Integration code constructs `drizzle(neon(target), { schema })`, passes that instance to the unchanged service, and never imports the global database value.
 
-- [ ] **Step 1: Write and observe failing target-guard tests.**
+- [x] **Step 1: Write and observe failing target-guard tests.**
 
 ```typescript
 import { expect, it } from "vitest";
@@ -351,7 +353,7 @@ it("does not put credentials in its error", () => {
 
 Use Vitest imports and import the exact helper path `./__tests__/usage-test-target`. Run `rtk proxy npx --no-install vitest run src/usage/usage-test-target.test.ts` and confirm the helper is absent before implementation.
 
-- [ ] **Step 2: Implement the pure test guard.**
+- [x] **Step 2: Implement the pure test guard.**
 
 ```typescript
 export function resolveUsageTestTarget(values: Record<string, string | undefined>): string | null {
@@ -379,7 +381,7 @@ export function resolveUsageTestTarget(values: Record<string, string | undefined
 
 The acknowledgment remains necessary: endpoint comparison cannot identify every possible database alias. No URLs are printed by the guard.
 
-- [ ] **Step 3: Replace integration setup with a dedicated guarded client.**
+- [x] **Step 3: Replace integration setup with a dedicated guarded client.**
 
 Retain the integration test filename but remove the old `SCRAPER_TEST_USER_ID` gate, global database imports, shared users, and order-dependent cases. Load `.env.test.local`, `.env.local`, and `.env` through installed dotenv with `quiet: true`, without overriding existing process variables. Initialize the test client only after `resolveUsageTestTarget(process.env)` returns a URL. Use `describe.skip` when it returns null; when explicit integration opt-in is unsafe, let validation fail before a client is constructed.
 
@@ -438,7 +440,7 @@ afterAll(async () => {
 
 Only captured fixture IDs are deleted. Do not seed, migrate, or truncate the personal database. The test target must already have compatible schema provisioned using an explicitly targeted separate connection.
 
-- [ ] **Step 4: Add the real-database scenarios inside `describeQuota`.**
+- [x] **Step 4: Add the real-database scenarios inside `describeQuota`.**
 
 Use an explicit 120-second timeout per scenario; never run them without the disposable target and acknowledgment.
 
@@ -510,7 +512,7 @@ it("fails closed on SQL error and releases the quota lock", async () => {
 }, 120_000);
 ```
 
-- [ ] **Step 5: Add a lock-wait regression that proves the snapshot boundary.**
+- [x] **Step 5: Add a lock-wait regression that proves the snapshot boundary.**
 
 Import `setTimeout` as `delay` from `node:timers/promises`. Use the same namespaced lock key as admission. Observe both the granted holder and the blocked contender in `pg_locks`; a sequential result without an observed wait is insufficient.
 
@@ -559,7 +561,7 @@ it("observes the previous holder's commit after waiting for the lock", async () 
 
 If network latency prevents observing the deliberate three-second hold, report that test limitation; do not turn this into a sequential test or remove the assertion. Adjust test orchestration within the five-second product lock timeout only after examining real output.
 
-- [ ] **Step 6: Run available checks, document the live gate, commit and push.**
+- [x] **Step 6: Run available checks, document the live gate, commit and push.**
 
 ```powershell
 rtk proxy npx --no-install vitest run src/usage/usage.db.test.ts src/usage/usage.service.test.ts src/usage/usage-test-target.test.ts
@@ -575,7 +577,7 @@ rtk proxy git push origin feat/atomic-usage-quotas
 
 In `docs/ATOMIC-USAGE-QUOTAS.md`, record actual default counts, type/lint/build output, the five/ten/twenty-second limits, no automatic retries for unknown commits, fixture-cleanup scope, and these required local variables: `DATABASE_URL`, `USAGE_TEST_DATABASE_URL`, `USAGE_TEST_ALLOW_WRITES=1`. Never include their secret values. The roadmap must say implementation is pending real concurrency verification if that verification cannot run.
 
-- [ ] **Step 7: Run real verification only after a disposable target is supplied and acknowledged.**
+- [x] **Step 7: Run real verification after the target is explicitly approved and acknowledged.**
 
 With the variables configured locally and test schema already provisioned:
 
@@ -585,7 +587,7 @@ rtk proxy npx --no-install cross-env SCRAPER_INTEGRATION=1 SCRAPER_CANARY=0 vite
 
 Run only that file, not the general integration script against a mixture of personal and test targets. Missing/unsafe configuration must fail before writes. Record every concurrency result and verify fixture cleanup. If the target is unavailable, leave this step unchecked and report the exact missing prerequisite; no personal-database substitution.
 
-- [ ] **Step 8: Record release readiness, commit and push the evidence.**
+- [x] **Step 8: Record release readiness, commit and push the evidence.**
 
 Once all real scenarios pass, update the operating record and roadmap with actual output and date, then commit those two documents with `docs: record verified atomic quota admission` and push the feature branch. Do not mark the shared-budget portion of Phase 2 complete.
 
@@ -593,12 +595,12 @@ Before integration into deployment-tracking `main`, confirm the rollout will dra
 
 ## Completion Checklist
 
-- [ ] Product admission uses a fresh post-lock snapshot and confirms commit before provider work.
-- [ ] User/action limits and rolling-window history are preserved; the legacy writer has no callers.
-- [ ] Invalid limits, malformed responses, transport failure, and service rejection fail closed.
-- [ ] Safe-target guard tests and all default checks pass.
-- [ ] Real last-unit, exhausted, lock-wait, isolation, expiry, provider-failure, and SQL-error cases pass on the disposable target.
-- [ ] Fixture cleanup and rollout constraints are recorded.
-- [ ] Scoped commits are pushed; questionnaire edits are untouched.
+- [x] Product admission uses a fresh post-lock snapshot and confirms commit before provider work.
+- [x] User/action limits and rolling-window history are preserved; the legacy writer has no callers.
+- [x] Invalid limits, malformed responses, transport failure, and service rejection fail closed.
+- [x] Safe-target guard tests and all default checks pass.
+- [x] Real last-unit, exhausted, lock-wait, isolation, expiry, provider-failure, and SQL-error cases pass on the explicitly authorized target.
+- [x] Fixture cleanup and rollout constraints are recorded.
+- [x] Scoped commits are pushed; questionnaire edits are untouched.
 
-Plan review precedes execution. Native/inline execution remains the chosen project approach; no new delegation or service setup is required to approve this plan.
+Native/inline execution completed. Main-database authorization and the existing-migration approval are documented in the operating record; shared budgets and remaining SaaS phases are not marked complete.

@@ -2,7 +2,9 @@
 
 **Date:** 2026-10-09
 
-**Status:** Design approved for implementation planning on 2026-10-09; implementation and database verification have not started.
+**Status:** Implemented and verified on 2026-10-10; see the [execution record](../../ATOMIC-USAGE-QUOTAS.md).
+
+**Approved execution amendments:** The user explicitly permitted fixture-only main-database tests on 2026-10-10 and separately approved applying existing pending migration `0016`. Default target safety remains, with a separate `USAGE_TEST_ALLOW_MAIN_DATABASE=1` opt-in for the approved exception. The core admission design, limits, and caller interfaces are unchanged.
 
 **Scope:** The next slice of [SaaS Phase 2](../../SAAS-PHASED-PLAN.md). Shared monetary budgets remain a separate design.
 
@@ -81,11 +83,11 @@ During rollout, old application instances may still write without taking the new
 
 Default tests must keep database integration and live-source modes off. Unit tests can verify service rejection, accepted admission, invalid limits, missing/malformed admission results, and error propagation, but cannot prove PostgreSQL concurrency.
 
-Live verification requires a disposable Neon test database populated with schema and throwaway fixtures only. No disposable connection has been supplied or verified. Do not infer permission to use the personal `DATABASE_URL` from an instruction to continue development.
+Prefer a disposable Neon test database populated with schema and throwaway fixtures only. The executed verification used the main database under the explicit amendment above; an instruction merely to continue development is not permission to reuse that exception.
 
-The quota integration suite must construct a dedicated database instance from `USAGE_TEST_DATABASE_URL`, with `SCRAPER_INTEGRATION=1` and `USAGE_TEST_ALLOW_WRITES=1` as explicit integration and disposable-target write opt-ins. It must never fall back to the application's database instance. Keep test credentials in local environment configuration, not committed files or chat.
+The quota integration suite constructs its own guarded database instance from `USAGE_TEST_DATABASE_URL`, with `SCRAPER_INTEGRATION=1` and `USAGE_TEST_ALLOW_WRITES=1` as opt-ins. It never imports the global application database value. Only explicit `USAGE_TEST_ALLOW_MAIN_DATABASE=1` permission permits using `DATABASE_URL` as its target or fallback. Keep credentials in local environment configuration, not committed files or chat.
 
-Before any test write, require the personal `DATABASE_URL` for comparison and reject a target matching its normalized endpoint/database identity, accounting for pooled versus direct Neon endpoints and ignoring credentials in the comparison. Never print either connection string. This comparison is a safety check, not proof that arbitrary aliases refer to different databases; the operator must confirm the target is disposable using the write opt-in. Missing configuration skips the suite in normal runs; an explicitly requested integration run with missing or unsafe configuration fails without writing.
+Before any test write, require the personal `DATABASE_URL` for comparison and reject a matching normalized endpoint/database identity unless main permission is explicit, accounting for pooled versus direct Neon endpoints and ignoring credentials. Never print either connection string. Identity comparison cannot recognize every alias; operator acknowledgment remains necessary. Missing configuration skips normal runs; explicitly requested runs with missing or unsafe configuration fail without writes.
 
 Create independent throwaway users per scenario and clean up only those recorded fixture IDs. Do not truncate tables, reuse the personal user ID, apply migrations through the default production-configured command, or depend on test execution order. Provision the test schema separately with an explicitly targeted connection.
 
@@ -104,4 +106,4 @@ Full default tests and TypeScript must pass after implementation; rerun lint and
 
 ## Next Step
 
-Review the [focused implementation plan](../plans/2026-10-09-atomic-usage-quotas.md) before execution. It distinguishes implementable code/unit-test work from real-database verification awaiting a disposable target. Shared request ceilings, monetary reservations/reconciliation, verified accounts, pilot allowances, and bounded provider retries remain later Phase 2 work.
+The [focused implementation plan](../plans/2026-10-09-atomic-usage-quotas.md) has been executed with the approved amendments. Shared request ceilings, monetary reservations/reconciliation, verified accounts, pilot allowances, and bounded provider retries remain later Phase 2 work.

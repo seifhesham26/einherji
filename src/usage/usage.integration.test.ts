@@ -1,117 +1,170 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { config } from "dotenv";
+import { createId } from "@paralleldrive/cuid2";
+import { setTimeout as delay } from "node:timers/promises";
+import * as schema from "@/lib/db/schema";
+import { consumeQuota, fetchQuotaStatus } from "./usage.service";
+import { DAILY_QUOTAS, QUOTA_WINDOW_MS, type UsageAction } from "./usage.validators";
+import { resolveUsageTestTarget } from "./__tests__/usage-test-target";
 
-config({ path: ".env.local" });
+config({ path: [".env.test.local", ".env.local", ".env"], quiet: true });
+const target = resolveUsageTestTarget(process.env);
+const testDb = target ? drizzle(neon(target), { schema }) : null;
+const describeQuota = target ? describe : describe.skip;
+const fixtureIds = new Set<string>();
 
-// The quota is only worth anything if it survives a cold start, which means it
-// has to be read back out of the database — so it's tested against a real one.
-//
-//   SCRAPER_INTEGRATION=1 SCRAPER_TEST_USER_ID=<id> npx vitest run src/usage/usage.integration.test.ts
-const isEnabled =
-  process.env.SCRAPER_INTEGRATION === "1" && Boolean(process.env.SCRAPER_TEST_USER_ID);
-const describeIntegration = isEnabled ? describe : describe.skip;
+function database() {
+  if (!testDb) throw new Error("Usage-test database not configured");
+  return testDb;
+}
 
-const quotaUserId = `quota-test-${Date.now()}`;
-// A second throwaway account. These tests used to consume the *real* account's
-// parse_cv allowance, so running them a few times in a day exhausted the very
-// quota they were asserting against — the tests failed while the code was right.
-const otherQuotaUserId = `quota-other-${Date.now()}`;
+async function newUser(id = `quota-test-${createId()}`) {
+  fixtureIds.add(id);
+  await database().insert(schema.users).values({
+    id, name: "Quota Test", email: `${id}@invalid.test`, emailVerified: false,
+    createdAt: new Date(), updatedAt: new Date(),
+  });
+  return id;
+}
 
-beforeAll(async () => {
-  if (!isEnabled) return;
-  const { db } = await import("@/lib/db");
-  const { users } = await import("@/lib/db/schema");
+async function seed(id: string, action: UsageAction, amount: number, ageMs = 0) {
+  await database().$client.query(`
+    INSERT INTO usage_events (id, user_id, action, created_at)
+    SELECT $1 || '-' || n, $2, $3::usage_action,
+      clock_timestamp()::timestamp - ($5::double precision * interval '1 millisecond')
+    FROM generate_series(1, $4::integer) AS n
+  `, [createId(), id, action, amount, ageMs]);
+}
 
-  await db.insert(users).values(
-    [quotaUserId, otherQuotaUserId].map((id) => ({
-      id,
-      name: "Quota Test",
-      email: `${id}@invalid.test`,
-      emailVerified: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })),
+async function persisted(id: string, action: UsageAction) {
+  const [row] = await database().$client.query(
+    "SELECT count(*) AS used FROM usage_events WHERE user_id = $1 AND action = $2::usage_action", [id, action],
   );
-});
+  return Number(row.used);
+}
+
+async function waitForLock(key: string, granted: boolean) {
+  const deadline = Date.now() + 2_000;
+  while (Date.now() < deadline) {
+    const [row] = await database().$client.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_locks
+        WHERE locktype = 'advisory' AND objsubid = 1 AND granted = $2
+          AND classid = ((hashtextextended($1, 0) >> 32) & 4294967295)::oid
+          AND objid = (hashtextextended($1, 0) & 4294967295)::oid
+      ) AS present
+    `, [key, granted]);
+    if (row.present === true) return;
+    await delay(50);
+  }
+  throw new Error("The required quota-lock state was not observed");
+}
 
 afterAll(async () => {
-  if (!isEnabled) return;
-  const { db } = await import("@/lib/db");
-  const { users } = await import("@/lib/db/schema");
-  const { inArray } = await import("drizzle-orm");
-
-  // Cascades the usage rows away with them.
-  await db.delete(users).where(inArray(users.id, [quotaUserId, otherQuotaUserId]));
+  if (testDb && fixtureIds.size) {
+    // Even an ambiguous fixture insert cannot authorize deleting an existing account.
+    await testDb.delete(schema.users).where(and(
+      inArray(schema.users.id, [...fixtureIds]),
+      eq(schema.users.name, "Quota Test"),
+      sql`${schema.users.email} = ${schema.users.id} || '@invalid.test'`,
+    ));
+    const remaining = await testDb.select({ id: schema.users.id })
+      .from(schema.users).where(inArray(schema.users.id, [...fixtureIds]));
+    expect(remaining).toHaveLength(0);
+  }
 });
 
-describeIntegration("usage quotas (live, writes to db)", () => {
-  it("stops the caller once the limit for an action is spent", async () => {
-    const { db } = await import("@/lib/db");
-    const { consumeQuota } = await import("./usage.service");
-    const { DAILY_QUOTAS } = await import("./usage.validators");
-
-    const limit = DAILY_QUOTAS.parse_cv;
-
-    for (let call = 0; call < limit; call++) {
-      await consumeQuota(db, quotaUserId, "parse_cv");
+describeQuota("atomic usage quotas (writes only test-owned fixtures)", () => {
+  it("admits exactly one of twenty contenders for the last unit", async () => {
+    const id = await newUser();
+    await seed(id, "parse_cv", DAILY_QUOTAS.parse_cv - 1);
+    const results = await Promise.allSettled(Array.from({ length: 20 }, () => consumeQuota(database(), id, "parse_cv")));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    for (const result of results) {
+      if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "TOO_MANY_REQUESTS" });
     }
+    expect(await persisted(id, "parse_cv")).toBe(DAILY_QUOTAS.parse_cv);
+  }, 120_000);
 
-    await expect(consumeQuota(db, quotaUserId, "parse_cv")).rejects.toMatchObject({
-      code: "TOO_MANY_REQUESTS",
+  it("does not insert for concurrent exhausted requests", async () => {
+    const id = await newUser();
+    await seed(id, "parse_cv", DAILY_QUOTAS.parse_cv);
+    const results = await Promise.allSettled(Array.from({ length: 20 }, () => consumeQuota(database(), id, "parse_cv")));
+    for (const result of results) {
+      expect(result.status).toBe("rejected");
+      if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    }
+    expect(await persisted(id, "parse_cv")).toBe(DAILY_QUOTAS.parse_cv);
+  }, 120_000);
+
+  it("keeps accounts and actions separate", async () => {
+    const first = await newUser();
+    const second = await newUser();
+    await seed(first, "parse_cv", DAILY_QUOTAS.parse_cv);
+    await expect(consumeQuota(database(), first, "parse_cv")).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    await expect(consumeQuota(database(), first, "generate_document")).resolves.toBeUndefined();
+    await expect(consumeQuota(database(), second, "parse_cv")).resolves.toBeUndefined();
+  }, 120_000);
+
+  it("expires old capacity without deleting history and retains status fields", async () => {
+    const id = await newUser();
+    await seed(id, "parse_cv", DAILY_QUOTAS.parse_cv, QUOTA_WINDOW_MS + 3_600_000);
+    await consumeQuota(database(), id, "parse_cv");
+    expect(await persisted(id, "parse_cv")).toBe(DAILY_QUOTAS.parse_cv + 1);
+    const status = await fetchQuotaStatus(database(), id);
+    expect(status.find((entry) => entry.action === "parse_cv")).toEqual({
+      action: "parse_cv", label: "CV parses", used: 1, limit: 20, remaining: 19,
     });
   }, 120_000);
 
-  it("keeps each action's budget separate", async () => {
-    const { db } = await import("@/lib/db");
-    const { consumeQuota } = await import("./usage.service");
+  it("counts provider failure and prevents work after exhausted admission", async () => {
+    const id = await newUser();
+    const provider = vi.fn().mockRejectedValue(new Error("Provider failed"));
+    const request = async () => { await consumeQuota(database(), id, "parse_cv"); return provider(); };
+    await expect(request()).rejects.toThrow("Provider failed");
+    expect(await persisted(id, "parse_cv")).toBe(1);
+    await seed(id, "parse_cv", DAILY_QUOTAS.parse_cv - 1);
+    provider.mockClear();
+    await expect(request()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    expect(provider).not.toHaveBeenCalled();
+  }, 120_000);
 
-    // parse_cv is exhausted by the test above; spending it must not have touched
-    // the others, or one runaway feature would disable the whole app.
-    await expect(consumeQuota(db, quotaUserId, "generate_message")).resolves.toBeUndefined();
-  }, 60_000);
+  it("fails closed on SQL error and releases the quota lock", async () => {
+    const id = `quota-test-${createId()}`;
+    const provider = vi.fn();
+    const request = async () => { await consumeQuota(database(), id, "parse_cv"); return provider(); };
+    await expect(request()).rejects.toThrow();
+    expect(provider).not.toHaveBeenCalled();
+    expect(await persisted(id, "parse_cv")).toBe(0);
+    await newUser(id);
+    await expect(consumeQuota(database(), id, "parse_cv")).resolves.toBeUndefined();
+    expect(await persisted(id, "parse_cv")).toBe(1);
+  }, 120_000);
 
-  it("keeps each user's budget separate", async () => {
-    const { db } = await import("@/lib/db");
-    const { consumeQuota } = await import("./usage.service");
-
-    await expect(
-      consumeQuota(db, otherQuotaUserId, "parse_cv"),
-    ).resolves.toBeUndefined();
-  }, 60_000);
-
-  it("reports what has been used and what is left", async () => {
-    const { db } = await import("@/lib/db");
-    const { fetchQuotaStatus } = await import("./usage.service");
-    const { DAILY_QUOTAS } = await import("./usage.validators");
-
-    const quotas = await fetchQuotaStatus(db, quotaUserId);
-    const parseCv = quotas.find((quota) => quota.action === "parse_cv");
-
-    expect(parseCv?.used).toBe(DAILY_QUOTAS.parse_cv);
-    expect(parseCv?.remaining).toBe(0);
-
-    const generate = quotas.find((quota) => quota.action === "generate_message");
-    expect(generate?.remaining).toBe(DAILY_QUOTAS.generate_message - 1);
-  }, 60_000);
-
-  // The point of charging before the work: a call that throws has still been
-  // billed by the provider, so a retry loop must not be free.
-  it("counts an attempt that fails, not just a success", async () => {
-    const { db } = await import("@/lib/db");
-    const { getUsageInWindow } = await import("./usage.db");
-    const { extractCv } = await import("@/criteria/criteria.service");
-    const { QUOTA_WINDOW_MS } = await import("./usage.validators");
-
-    const windowStart = () => new Date(Date.now() - QUOTA_WINDOW_MS);
-    const before = await getUsageInWindow(db, otherQuotaUserId, "parse_cv", windowStart());
-
-    // A private address — the SSRF guard rejects it, so this fails after the
-    // quota is charged and without any network call leaving the box.
-    await expect(
-      extractCv(db, otherQuotaUserId, { cvUrl: "http://127.0.0.1/cv.pdf" }),
-    ).rejects.toThrow();
-
-    const after = await getUsageInWindow(db, otherQuotaUserId, "parse_cv", windowStart());
-    expect(after.used).toBe(before.used + 1);
-  }, 60_000);
+  it("observes the previous holder's commit after waiting for the lock", async () => {
+    const id = await newUser();
+    await seed(id, "parse_cv", DAILY_QUOTAS.parse_cv - 1);
+    const client = database().$client;
+    const key = JSON.stringify(["einherji:usage-quota:v1", id, "parse_cv"]);
+    const holder = client.transaction([
+      client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [key]),
+      client.query("INSERT INTO usage_events (id, user_id, action, created_at) VALUES ($1, $2, 'parse_cv', clock_timestamp()::timestamp)", [createId(), id]),
+      client.query("SELECT pg_sleep(3)"),
+    ], { isolationLevel: "ReadCommitted" }).then(() => ({ ok: true }), (error: unknown) => ({ ok: false, error }));
+    let contender: Promise<unknown> | undefined;
+    try {
+      await waitForLock(key, true);
+      contender = consumeQuota(database(), id, "parse_cv").then(() => ({ ok: true }), (error: unknown) => ({ ok: false, error }));
+      await waitForLock(key, false);
+      expect(await holder).toEqual({ ok: true });
+      expect(await contender).toMatchObject({ ok: false, error: { code: "TOO_MANY_REQUESTS" } });
+      expect(await persisted(id, "parse_cv")).toBe(DAILY_QUOTAS.parse_cv);
+    } finally {
+      await holder;
+      if (contender) await contender;
+    }
+  }, 120_000);
 });

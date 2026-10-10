@@ -1,7 +1,8 @@
 # Einherji SaaS Phased Plan
 
 **Date:** 2026-10-03  
-**Status:** Phase 1 complete; Phase 2 funding-policy slice complete, remaining controls planned  
+**Status:** Phase 1 complete; Phase 2 funding policy and atomic user quotas verified, remaining controls planned
+
 **Current phase:** 2 - Affordable usage (partially implemented)
 
 ## Working Brief
@@ -90,7 +91,8 @@ The parser should continue to interpret a live listing's age relative to the act
 - [ ] Select currently available models with acceptable pricing and data handling before enabling funded models. Allowlists are empty by default; deployment configuration has not been changed.
 - [ ] Give pilot users small allowances. Initial proposed daily maxima: one CV parse, two fit reports, two generated documents, one scrape, and no funded hiring-manager searches.
 - [ ] Add a configurable shared AI request ceiling and monthly funded-spend ceiling. Per-user maxima remain subject to shared availability and should not be presented as guaranteed provider capacity.
-- [ ] Make quota/budget admission safe under concurrency. Current quota checking and event insertion are separate operations.
+- [x] Make per-user/action quota admission atomic under concurrency while preserving rolling limits and history.
+- [ ] Integrate shared budget reservations with atomic admission; individual quotas alone do not bound aggregate spending.
 - [ ] Count provider attempts that may incur charges; bound prompt sizes, output tokens, retries, and batch sizes. Reserve a conservative cost before paid work and reconcile actual cost afterward.
 - [ ] Keep paid fallback disabled for pilot accounts initially. Customer-provided keys remain optional and do not bypass platform workload controls.
 - [ ] Require a verified account before platform-funded actions, while allowing access to saved data and profile editing.
@@ -104,7 +106,7 @@ Provider free capacity is shared and subject to rate limits, so it supplements t
 
 **First slice completed 2026-10-03:** [AI funding policy and execution record](C:/dev/einherji/docs/AI-FUNDING-POLICY.md). All 20 resolver-policy tests pass; the full default suite passes 397 tests with 64 skips. Quota admission, shared budgets, account verification, and deployment model selection remain planned, so Phase 2 is not complete.
 
-**Next slice planned 2026-10-09:** [Approved atomic usage quotas design](C:/dev/einherji/docs/superpowers/specs/2026-10-09-atomic-usage-quotas-design.md) and [implementation plan for review](C:/dev/einherji/docs/superpowers/plans/2026-10-09-atomic-usage-quotas.md). Uses explicit `ReadCommitted` Neon HTTP transactions with a lock before the usage check; preserves the current schema, limits, and history. Product implementation has not started. Real concurrency verification still requires a disposable database.
+**Atomic user quotas verified 2026-10-10:** [Design](C:/dev/einherji/docs/superpowers/specs/2026-10-09-atomic-usage-quotas-design.md), [implementation plan](C:/dev/einherji/docs/superpowers/plans/2026-10-09-atomic-usage-quotas.md), and [execution/operating record](C:/dev/einherji/docs/ATOMIC-USAGE-QUOTAS.md). All 35 focused unit tests and seven live quota checks pass. The user explicitly approved fixture-only main-database verification and applying existing pending migration `0016`; fixtures were cleaned up. Shared budgets and the rest of Phase 2 remain planned.
 
 ## Phase 3 - Account And Document Lifecycle
 
@@ -187,16 +189,19 @@ Provider free capacity is shared and subject to rate limits, so it supplements t
 - [ ] Use pilot costs to decide whether expensive features need paid credits, optional customer keys, or a larger funded allowance. Configure payment only after choosing that model.
 - [ ] Start a separate design for the next validated customer mode. Shared workspaces become relevant when shared ownership and permissions are needed.
 
-## Current Baseline - Checked 2026-10-03
+## Current Baseline - Checked 2026-10-10
 
 | Check | Result | Meaning |
 | --- | --- | --- |
-| TypeScript | Passed with `tsc --noEmit`, rerun after the funding-policy change. | Changed code and current project type-check. |
+| TypeScript | Passed with `tsc --noEmit`, rerun after atomic quota changes. | Changed code and current project type-check. |
 | Focused date tests | 20 passed across two files. | Fixed-clock fixture and later reference dates preserve relative posting-date behavior. |
 | Funding-policy tests | 20 passed in the shared client resolver suite. | Personal-key priority and exact provider-specific allowlists verified without provider requests. |
-| Lint | Rerun after the funding-policy change: zero errors, one React Hook Form/React Compiler warning. | Existing warning remains documented. |
-| Default tests | 397 passed, zero failed, 64 skipped; 39 files passed, 10 skipped. | Wuzzuf and funding-policy checks pass; skipped coverage remains unverified. |
-| Production build | Rerun after the funding-policy change: passed on Next.js 16.2.6. | Sentry `disableLogger` deprecation warnings remain. |
+| Atomic quota unit tests | 35 passed across admission, service, and target-guard suites. | Confirms failure handling and target safety without provider calls. |
+| Live quota tests | Seven passed separately; fixture cleanup confirmed. | Includes concurrent final-unit and observed lock-wait verification. |
+| Lint | Rerun after atomic quota changes: zero errors, one React Hook Form/React Compiler warning. | Existing warning remains documented. |
+| Default tests | 432 passed, zero failed, 66 skipped; 42 files passed, 10 skipped. | Other skipped coverage remains unverified. |
+| Production build | Rerun after atomic quota changes: passed on Next.js 16.2.6. | Sentry `disableLogger` deprecation warnings remain. |
+| Dependency audit | 44 reported vulnerable packages, two critical-rated (`next`, `proxy-addr`). | Requires a separate security-remediation pass before public launch. |
 | Database/live-source modes | Explicitly disabled for the default test run. | No claim that the skipped integration coverage passed. |
 
 Current warnings should be assessed when their owning files are changed; the Sentry configuration warning should be resolved before a dependency upgrade makes it incompatible.
@@ -213,4 +218,4 @@ Current warnings should be assessed when their owning files are changed; the Sen
 
 ## Next Session
 
-Design atomic quota/budget admission using the existing Neon HTTP database connection, which cannot be assumed to support interactive transaction callbacks. Keep proposed pilot allowances configurable, validate funding eligibility before consuming an allowance, and prove concurrent last-unit admission against an isolated database. Preserve the personal database and closed registration; the implemented funding-policy slice alone does not establish public-launch readiness.
+Prioritize the newly observed dependency security advisories before public exposure, then design shared request/spend ceilings and funding eligibility before consuming an allowance. Atomic per-user quotas are verified, but they are not an aggregate monetary budget. Preserve existing data and closed registration; the remaining Phase 2 and pilot-readiness controls still apply.
