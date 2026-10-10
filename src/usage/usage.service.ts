@@ -1,8 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import type { Database } from "@/lib/db";
-import { admitUsage, getUsageInWindow, type UsageAdmissionOptions } from "./usage.db";
+import { admitUsage, getSharedAiUsage, getUsageInWindow, type UsageAdmissionOptions } from "./usage.db";
+import { getDailyQuotaLimits } from "./quota-policy";
 import {
-  DAILY_QUOTAS,
   QUOTA_WINDOW_MS,
   USAGE_ACTION_LABELS,
   type UsageAction,
@@ -22,7 +22,7 @@ const MS_PER_MINUTE = 60_000;
  * failures, including an unknown commit outcome, never authorize provider work.
  */
 export async function consumeQuota(db: Database, userId: string, action: UsageAction, options?: UsageAdmissionOptions) {
-  const limit = DAILY_QUOTAS[action];
+  const limit = getDailyQuotaLimits()[action];
   const { admitted, oldestAt, sharedExhausted } = options
     ? await admitUsage(db, userId, action, limit, options)
     : await admitUsage(db, userId, action, limit);
@@ -32,6 +32,7 @@ export async function consumeQuota(db: Database, userId: string, action: UsageAc
       code: "TOO_MANY_REQUESTS",
       message: sharedExhausted
         ? "Shared AI capacity is exhausted or paused. Saved data remains available; try again later."
+        : limit === 0 ? "This action is paused for the pilot."
         : `Daily limit reached — ${limit} ${USAGE_ACTION_LABELS[action]} per 24 hours. ${describeReset(oldestAt)}`,
     });
   }
@@ -41,7 +42,8 @@ export async function consumeQuota(db: Database, userId: string, action: UsageAc
 export async function fetchQuotaStatus(db: Database, userId: string) {
   const windowStart = new Date(Date.now() - QUOTA_WINDOW_MS);
 
-  const actions = Object.keys(DAILY_QUOTAS) as UsageAction[];
+  const limits = getDailyQuotaLimits();
+  const actions = Object.keys(limits) as UsageAction[];
   const windows = await Promise.all(
     actions.map((action) => getUsageInWindow(db, userId, action, windowStart)),
   );
@@ -50,9 +52,15 @@ export async function fetchQuotaStatus(db: Database, userId: string) {
     action,
     label: USAGE_ACTION_LABELS[action],
     used: windows[index].used,
-    limit: DAILY_QUOTAS[action],
-    remaining: Math.max(DAILY_QUOTAS[action] - windows[index].used, 0),
+    limit: limits[action],
+    remaining: Math.max(limits[action] - windows[index].used, 0),
   }));
+}
+
+export async function fetchSharedAiQuotaStatus(db: Database, limit: number) {
+  if (!Number.isSafeInteger(limit) || limit < 0) throw new Error("Invalid shared AI limit");
+  const used = await getSharedAiUsage(db, new Date(Date.now() - QUOTA_WINDOW_MS));
+  return { used, limit, remaining: Math.max(limit - used, 0), paused: limit === 0 };
 }
 
 // "Try again in about 3 hours." — the oldest event leaving the window is exactly

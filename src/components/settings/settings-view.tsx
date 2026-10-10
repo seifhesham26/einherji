@@ -8,6 +8,7 @@ import MuteRulesSection from "./mute-rules-section";
 import AiKeysSection from "./ai-keys-section";
 import SourceCredentialsSection from "./source-credentials-section";
 import IntegrationsSection from "./integrations-section";
+import UsageSection from "./usage-section";
 
 export default function SettingsView() {
   return (
@@ -40,6 +41,10 @@ export default function SettingsView() {
       {/* Beside the source credentials, because it is the same kind of decision:
           which of these third-party bills is yours. */}
       <AiKeysSection />
+
+      <Separator />
+
+      <UsageSection />
 
       <Separator />
 

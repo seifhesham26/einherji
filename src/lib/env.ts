@@ -14,6 +14,7 @@ const serverEnvSchema = z.object({
   // All AI attempts share this rolling 24-hour capacity, including personal keys.
   // Zero pauses new AI work without preventing saved-data access.
   AI_SHARED_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(0).max(10_000).default(50),
+  SAAS_PILOT_MODE: z.enum(["0", "1"]).optional(),
   BETTER_AUTH_SECRET: z.string().min(1),
   BETTER_AUTH_URL: z.string().url(),
   NEXT_PUBLIC_APP_URL: z.string().url(),

@@ -57,8 +57,8 @@ export default function AiKeysSection() {
           AI keys
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Fit reports, cover letters, job analysis and outreach all run on these. Leave them
-          empty and this server&apos;s own key pays instead.
+          Personal keys are billed by your provider. Platform AI is limited to enabled free models
+          and requires a verified email.
         </p>
       </div>
 

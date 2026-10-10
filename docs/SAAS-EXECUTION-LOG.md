@@ -171,3 +171,42 @@ separately. TypeScript, lint (one existing warning), and Next 16.4 production
 build passed. Review: author self-review of lock ordering, fresh snapshots,
 bound parameters, shared denial metadata, zero capacity, malformed results and
 all current AI service callers. The public pilot remains unopened.
+
+## 2026-10-10 - Pilot Allowances And Visibility
+
+SAAS_PILOT_MODE=1 selects one CV parse, two fit reports, two documents, one
+scrape, zero hiring-manager searches, five analyses and two messages per rolling
+24 hours. Unset/0 preserves personal-install quotas. Ambiguous mode values
+fail closed; no deployment environment setting was changed. Admission and
+status read the same policy.
+
+Settings shows individual remaining allowances, shared AI capacity, the $0
+platform spending policy, loading/error and paused states, plus refresh. The
+shared read endpoint is authenticated and exposes only aggregate counts, not
+account identities or content. Its status is advisory; admission is authoritative.
+The AI-key copy no longer promises an unconditional server-funded fallback.
+
+Browser verification used an isolated headless Edge profile with fake UI session
+data and intercepted every API request. No actual account/provider API calls.
+Desktop 1280x900 and mobile 390x844 both showed seven rows without horizontal
+overflow; refresh made new fixture queries, and paused state remained clear.
+Screenshots inspected. Offline render tests cover error/loading/allowance states.
+Ten live fixture-only quota checks passed, including pilot final-slot admission,
+disabled manager searches and matching displayed limits; fixtures were cleaned.
+
+Ruling: the copied environment referenced the deployed host, so local dev uses
+process-only localhost URL overrides; no environment files were edited. Browser
+requests to that host were blocked. The check also exposed an existing trailing-
+slash API URL bug. Two regression cases failed before replacing concatenation
+with the native URL constructor; three URL cases now pass. Cost: URL root paths
+remain the existing contract (the app has no configured Next basePath).
+
+Ruling: keep personal installation limits unless the operator explicitly enables
+pilot mode. Cost: readiness requires enabling it in the pilot deployment, not
+assuming code defaults have reduced all existing accounts' limits.
+
+Verification: 504 default tests passed, 69 skipped; TypeScript, lint (one
+existing warning) and production build passed. Ten live quota tests passed
+separately. Author self-review checked shared/per-user status consistency,
+authenticated aggregate reads, inaccessible/error/loading states, secret-free
+client configuration, and the unchanged personal/default deployment settings.

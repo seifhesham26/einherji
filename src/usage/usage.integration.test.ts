@@ -78,6 +78,22 @@ afterAll(async () => {
 });
 
 describeQuota("atomic usage quotas (writes only test-owned fixtures)", () => {
+  it("enforces and displays pilot limits without allowing hiring-manager searches", async () => {
+    const id = await newUser();
+    vi.stubEnv("SAAS_PILOT_MODE", "1");
+    try {
+      const results = await Promise.allSettled(Array.from({ length: 5 }, () => consumeQuota(database(), id, "parse_cv")));
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(await persisted(id, "parse_cv")).toBe(1);
+      await expect(consumeQuota(database(), id, "find_managers")).rejects.toThrow("paused for the pilot");
+      expect(await persisted(id, "find_managers")).toBe(0);
+      const status = await fetchQuotaStatus(database(), id);
+      expect(status.find((row) => row.action === "parse_cv")).toMatchObject({ used: 1, limit: 1, remaining: 0 });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 120_000);
+
   it("admits one of twenty accounts/actions competing for shared final capacity", async () => {
     const ids: string[] = [];
     for (let index = 0; index < 4; index++) ids.push(await newUser());

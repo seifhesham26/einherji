@@ -89,14 +89,14 @@ The parser should continue to interpret a live listing's age relative to the act
 
 - [x] Centralize exact, provider-specific server funding allowlists; compatible personal keys take priority and unapproved platform funding is rejected before provider requests.
 - [ ] Select currently available models with acceptable pricing and data handling before enabling funded models. Allowlists are empty by default; deployment configuration has not been changed.
-- [ ] Give pilot users small allowances. Initial proposed daily maxima: one CV parse, two fit reports, two generated documents, one scrape, and no funded hiring-manager searches.
+- [x] Implement small pilot allowances behind `SAAS_PILOT_MODE=1`: one CV parse, two fit reports, two generated documents, one scrape, no hiring-manager searches, five job analyses and two messages per rolling 24 hours. Personal-install defaults are unchanged; deployment pilot mode has not been enabled.
 - [x] Add a configurable atomic shared AI request ceiling. The operator chose a $0 monthly platform AI ceiling, enforced by rejecting paid platform inference even when mistakenly allowlisted. Per-user maxima remain subject to shared availability; paid-spend reservation/reconciliation is required before any future paid funding.
 - [x] Make per-user/action quota admission atomic under concurrency while preserving rolling limits and history.
 - [x] Integrate shared request capacity with atomic user admission under the $0 policy. Paid monetary reservations remain out of scope while paid platform inference is prohibited.
-- [ ] Count provider attempts that may incur charges; bound prompt sizes, output tokens, retries, and batch sizes. Reserve a conservative cost before paid work and reconcile actual cost afterward.
+- [x] Count attempted provider work; bound text prompts, output tokens, SDK retries, duration and existing batch sizes. Paid platform work is prohibited by the $0 policy; conservative monetary reservations and reconciliation are required before introducing it.
 - [x] Keep paid platform inference/fallback disabled under the operator's $0 policy. Customer-provided keys remain optional and do not bypass platform workload controls.
 - [x] Require a verified account before platform-funded AI actions, while allowing access to saved data and profile editing. Verified server-side before atomic user quota admission; no deployment funding enabled.
-- [ ] Show remaining allowances and clear exhausted-budget behavior in the active user surfaces.
+- [x] Show personal and shared allowances, paused/exhausted state and refresh in Settings. Desktop/mobile browser checks passed using fixture-only API responses. Provider-action controls still enforce their limits server-side.
 
 Provider free capacity is shared and subject to rate limits, so it supplements these controls. It does not replace them. [OpenRouter limits](https://openrouter.ai/docs/api/reference/limits), [provider data practices](https://openrouter.ai/privacy).
 

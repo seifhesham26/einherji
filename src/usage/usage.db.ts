@@ -1,4 +1,4 @@
-import { and, count, eq, gte, min } from "drizzle-orm";
+import { and, count, eq, gte, inArray, min } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import type { Database } from "@/lib/db";
 import { usageEvents, users } from "@/lib/db/schema";
@@ -13,6 +13,12 @@ export interface UsageWindow {
 export async function isAccountVerified(db: Database, userId: string): Promise<boolean> {
   const [account] = await db.select({ verified: users.emailVerified }).from(users).where(eq(users.id, userId)).limit(1);
   return account?.verified === true;
+}
+
+export async function getSharedAiUsage(db: Database, since: Date): Promise<number> {
+  const [row] = await db.select({ used: count() }).from(usageEvents)
+    .where(and(inArray(usageEvents.action, [...AI_USAGE_ACTIONS]), gte(usageEvents.createdAt, since)));
+  return row?.used ?? 0;
 }
 
 export async function getUsageInWindow(
