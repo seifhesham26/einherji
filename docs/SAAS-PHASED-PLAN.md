@@ -218,4 +218,4 @@ Current warnings should be assessed when their owning files are changed; the Sen
 
 ## Next Session
 
-Prioritize the newly observed dependency security advisories before public exposure, then design shared request/spend ceilings and funding eligibility before consuming an allowance. Atomic per-user quotas are verified, but they are not an aggregate monetary budget. Preserve existing data and closed registration; the remaining Phase 2 and pilot-readiness controls still apply.
+Dependency remediation on 2026-10-10 removed the critical audit findings: Next.js/config 16.4.0, compatible dependency updates and a patched Effect override. The audit still reports 18 affected packages (14 high, four moderate), so public exposure still requires residual review. See [execution log](C:/dev/einherji/docs/SAAS-EXECUTION-LOG.md). Continue Phase 2 with bounded provider attempts and shared request/spend ceilings, then funding eligibility before consuming an allowance. Atomic per-user quotas are verified, but they are not an aggregate monetary budget. Preserve existing data and closed registration; the remaining Phase 2 and pilot-readiness controls still apply.
