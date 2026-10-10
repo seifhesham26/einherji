@@ -6,7 +6,7 @@ import { getActiveCriteria } from "@/criteria/criteria.db";
 import { getSettingsByUserId } from "@/settings/settings.db";
 import { getJobById } from "@/jobs/jobs.db";
 import { getFitReport } from "@/job-insights/job-insights.db";
-import { consumeQuota } from "@/usage/usage.service";
+import { admitAiAction } from "@/usage/ai-admission";
 import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
 import {
   deleteJobDocument,
@@ -73,13 +73,12 @@ export async function generateJobDocument(
     });
   }
 
-  await consumeQuota(db, userId, "generate_document");
-
   const model = activeCriteria?.model ?? DEFAULT_MODEL;
   const credentials: AiCredentials = {
     openrouterApiKey: settings?.openrouterApiKey ?? null,
     openaiApiKey: settings?.openaiApiKey ?? null,
   };
+  await admitAiAction(db, userId, "generate_document", model, credentials);
 
   const body = await writeJobDocument({
     kind: input.kind,

@@ -7,7 +7,7 @@ import type { AiCredentials } from "@/lib/ai/resolve-ai-client";
 import { getActiveCriteria } from "@/criteria/criteria.db";
 import { getSettingsByUserId } from "@/settings/settings.db";
 import { getJobById } from "@/jobs/jobs.db";
-import { consumeQuota } from "@/usage/usage.service";
+import { admitAiAction } from "@/usage/ai-admission";
 import { DEFAULT_MODEL } from "@/criteria/criteria.validators";
 import {
   countJobsAwaitingExtraction,
@@ -65,9 +65,8 @@ export async function analyseJob(db: Database, userId: string, input: ExtractJob
 
   // Charged before the call, not after: a completion that errors partway can
   // still have been billed by the provider.
-  await consumeQuota(db, userId, "extract_job_facts");
-
   const { credentials, model } = await resolveAiContext(db, userId);
+  await admitAiAction(db, userId, "extract_job_facts", model, credentials);
 
   const facts = await extractJobFacts({
     model,
@@ -115,7 +114,7 @@ export async function analyseJobBacklog(
   for (const job of pending) {
     // Charged per job. The quota is what stops a backlog of two thousand
     // postings becoming two thousand completions in an afternoon.
-    await consumeQuota(db, userId, "extract_job_facts");
+    await admitAiAction(db, userId, "extract_job_facts", model, credentials);
 
     try {
       const facts = await extractJobFacts({
@@ -192,7 +191,7 @@ export async function judgeJobFit(db: Database, userId: string, input: GenerateF
     });
   }
 
-  await consumeQuota(db, userId, "generate_fit_report");
+  await admitAiAction(db, userId, "generate_fit_report", model, credentials);
 
   const report = await writeFitReport({
     model,

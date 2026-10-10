@@ -95,7 +95,7 @@ The parser should continue to interpret a live listing's age relative to the act
 - [ ] Integrate shared budget reservations with atomic admission; individual quotas alone do not bound aggregate spending.
 - [ ] Count provider attempts that may incur charges; bound prompt sizes, output tokens, retries, and batch sizes. Reserve a conservative cost before paid work and reconcile actual cost afterward.
 - [ ] Keep paid fallback disabled for pilot accounts initially. Customer-provided keys remain optional and do not bypass platform workload controls.
-- [ ] Require a verified account before platform-funded actions, while allowing access to saved data and profile editing.
+- [x] Require a verified account before platform-funded AI actions, while allowing access to saved data and profile editing. Verified server-side before atomic user quota admission; no deployment funding enabled.
 - [ ] Show remaining allowances and clear exhausted-budget behavior in the active user surfaces.
 
 Provider free capacity is shared and subject to rate limits, so it supplements these controls. It does not replace them. [OpenRouter limits](https://openrouter.ai/docs/api/reference/limits), [provider data practices](https://openrouter.ai/privacy).

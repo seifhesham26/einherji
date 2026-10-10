@@ -69,20 +69,33 @@ function directOpenAIClient(apiKey: string): OpenAI {
  * apply. Provider failures never trigger a switch to a server-funded key.
  */
 export function resolveAiClient(model: string, credentials: AiCredentials = {}): OpenAI {
+  const { apiKey, provider } = resolveAiConfiguration(model, credentials);
+  return provider === "openai" ? directOpenAIClient(apiKey) : openRouterClient(apiKey);
+}
+
+export function resolveAiFundingSource(model: string, credentials: AiCredentials = {}): "personal" | "platform" {
+  return resolveAiConfiguration(model, credentials).funding;
+}
+
+function resolveAiConfiguration(model: string, credentials: AiCredentials): {
+  apiKey: string;
+  provider: "openai" | "openrouter";
+  funding: "personal" | "platform";
+} {
   const personalOpenaiKey = credentials.openaiApiKey?.trim();
-  if (isOpenAIModel(model) && personalOpenaiKey) return directOpenAIClient(personalOpenaiKey);
+  if (isOpenAIModel(model) && personalOpenaiKey) return { apiKey: personalOpenaiKey, provider: "openai", funding: "personal" };
 
   const personalOpenrouterKey = credentials.openrouterApiKey?.trim();
-  if (personalOpenrouterKey) return openRouterClient(personalOpenrouterKey);
+  if (personalOpenrouterKey) return { apiKey: personalOpenrouterKey, provider: "openrouter", funding: "personal" };
 
   if (isOpenAIModel(model) && isFundedModel(model, env.OPENAI_FUNDED_MODELS)) {
     const serverKey = env.OPENAI_API_KEY?.trim();
-    if (serverKey) return directOpenAIClient(serverKey);
+    if (serverKey) return { apiKey: serverKey, provider: "openai", funding: "platform" };
   }
 
   if (isFundedModel(model, env.OPENROUTER_FUNDED_MODELS)) {
     const serverKey = env.OPENROUTER_API_KEY?.trim();
-    if (serverKey) return openRouterClient(serverKey);
+    if (serverKey) return { apiKey: serverKey, provider: "openrouter", funding: "platform" };
   }
 
   throw new TRPCError({

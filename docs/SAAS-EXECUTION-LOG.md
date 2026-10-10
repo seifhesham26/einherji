@@ -103,3 +103,24 @@ Verification: 457 default tests passed, 66 skipped; TypeScript, lint (one
 existing warning) and production build passed. Review: author self-review of
 all five call sites and guard bypasses, including alternate output limits,
 multiple choices, UTF-8 sizing and unknown provider failures. No live AI calls.
+
+## 2026-10-10 - Funding Eligibility Before User Allowances
+
+All AI service paths now use one admission helper after owned-record and
+required-context checks. It resolves the same compatible-key selection as the
+SDK resolver, rejects unavailable platform models first, reads email verification
+from the database for platform funding, then consumes the atomic user quota.
+Personal keys still consume workload allowances. Saved fit reports need no new
+funding admission. A failed account read fails closed before quota/provider work.
+
+TDD: seven helper checks failed against quota-only admission; message checks
+reproduced allowances consumed for missing leads and missing pitches; five
+service checks exposed missing admission in CV, facts (single/batch), fit and
+document calls. The suite now passes 477 tests with 66 skips. TypeScript and
+lint pass (one existing warning). No migration or live provider call required.
+
+Ruling: verification is read server-side from the account record, not trusted
+from client input or a potentially stale session. Cost: an extra database read
+for a funded request. A concurrent account-state change after this read remains
+possible; admission is not an account-revocation transaction. Shared spending
+controls are still required before deployment funding is enabled.

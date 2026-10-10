@@ -7,7 +7,7 @@ import { getLeadById } from "@/leads/leads.db";
 import { getJobById } from "@/jobs/jobs.db";
 import { getSettingsByUserId } from "@/settings/settings.db";
 import { setLeadMessageSent } from "@/leads/leads.db";
-import { consumeQuota } from "@/usage/usage.service";
+import { admitAiAction } from "@/usage/ai-admission";
 import {
   approveMessage,
   getMessages,
@@ -42,10 +42,6 @@ export async function fetchMessages(db: Database, userId: string, input: GetMess
  * UI, stored, and read by nothing — every message used the account's CV.
  */
 export async function generateAndSaveMessage(db: Database, userId: string, input: GenerateMessageInput) {
-  // Charged before the model call, not after — a completion that errors partway
-  // can still have been billed.
-  await consumeQuota(db, userId, "generate_message");
-
   // Both scoped to userId. The lead lookup wasn't, which meant supplying someone
   // else's leadId fed their hiring manager's name, headline, about text and
   // recent posts into an LLM prompt and saved the result to your account.
@@ -81,9 +77,16 @@ export async function generateAndSaveMessage(db: Database, userId: string, input
   const isJobSeeking = JOB_SEEKING_TEMPLATES.includes(template);
   const job = isJobSeeking && lead.jobId ? await getJobById(db, userId, lead.jobId) : null;
 
+  const model = activeCriteria?.model ?? DEFAULT_MODEL;
+  const credentials = {
+    openrouterApiKey: settings?.openrouterApiKey ?? null,
+    openaiApiKey: settings?.openaiApiKey ?? null,
+  };
+  await admitAiAction(db, userId, "generate_message", model, credentials);
+
   const messageBody = await generateOutreachMessage({
     template,
-    model: activeCriteria?.model ?? DEFAULT_MODEL,
+    model,
     channel: resolveChannel(template, lead),
 
     leadFirstName: lead.firstName,
@@ -95,10 +98,7 @@ export async function generateAndSaveMessage(db: Database, userId: string, input
 
     senderPitch,
 
-    credentials: {
-      openrouterApiKey: settings?.openrouterApiKey ?? null,
-      openaiApiKey: settings?.openaiApiKey ?? null,
-    },
+    credentials,
 
     ...(job ? { jobTitle: job.title, jobDescription: job.description ?? "", jobUrl: job.jobUrl } : {}),
     ...(isJobSeeking

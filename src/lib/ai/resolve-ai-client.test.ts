@@ -12,7 +12,7 @@ const { env } = vi.hoisted(() => ({
 
 vi.mock("@/lib/env", () => ({ env }));
 
-import { resetAiClientCache, resolveAiClient } from "./resolve-ai-client";
+import { resetAiClientCache, resolveAiClient, resolveAiFundingSource } from "./resolve-ai-client";
 
 describe("AI funding policy", () => {
   beforeEach(() => {
@@ -156,5 +156,15 @@ describe("AI funding policy", () => {
     await expect(client.chat.completions.create({ model: "gpt-test", messages: [{ role: "user", content: "test" }] })).rejects.toThrow();
     expect(fetch).toHaveBeenCalledOnce();
     expect(new Headers(fetch.mock.calls[0]?.[1]?.headers).get("authorization")).toBe("Bearer personal-openai");
+  });
+
+  it("classifies the selected compatible key without exposing its secret", () => {
+    env.OPENAI_FUNDED_MODELS = "gpt-test";
+    env.OPENROUTER_FUNDED_MODELS = "vendor/test";
+    expect(resolveAiFundingSource("gpt-test", { openaiApiKey: "personal" })).toBe("personal");
+    expect(resolveAiFundingSource("vendor/test", { openrouterApiKey: "personal" })).toBe("personal");
+    expect(resolveAiFundingSource("gpt-test")).toBe("platform");
+    expect(resolveAiFundingSource("vendor/test", { openaiApiKey: "incompatible" })).toBe("platform");
+    expect(() => resolveAiFundingSource("vendor/other")).toThrow(expect.objectContaining({ code: "FORBIDDEN" }));
   });
 });

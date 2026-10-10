@@ -38,6 +38,9 @@ vi.mock("@/settings/settings.db", () => ({
 vi.mock("@/usage/usage.service", () => ({
   consumeQuota: (...args: unknown[]) => consumeQuota(...args),
 }));
+vi.mock("@/usage/ai-admission", () => ({
+  admitAiAction: (...args: unknown[]) => consumeQuota(...args),
+}));
 vi.mock("./messages.db", () => ({
   upsertDraftMessage: (...args: unknown[]) => upsertDraftMessage(...args),
   getMessages: vi.fn(),
@@ -203,6 +206,21 @@ describe("generateAndSaveMessage", () => {
 
     await expect(generate({ leadId: "lead_2" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(generateOutreachMessage).not.toHaveBeenCalled();
+    expect(consumeQuota).not.toHaveBeenCalled();
+  });
+
+  it("does not consume an allowance for an inaccessible lead", async () => {
+    getLeadById.mockResolvedValue(null);
+    await expect(generate({ leadId: "other-users-lead" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(consumeQuota).not.toHaveBeenCalled();
+    expect(generateOutreachMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not call the provider or save a draft when admission rejects", async () => {
+    consumeQuota.mockRejectedValueOnce(new Error("Funding denied"));
+    await expect(generate({ leadId: "lead_1" })).rejects.toThrow("Funding denied");
+    expect(generateOutreachMessage).not.toHaveBeenCalled();
+    expect(upsertDraftMessage).not.toHaveBeenCalled();
   });
 
   // A business contact has no posting behind it, and inventing one invites the

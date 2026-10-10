@@ -1,13 +1,18 @@
 import { and, count, eq, gte, min } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 import type { Database } from "@/lib/db";
-import { usageEvents } from "@/lib/db/schema";
+import { usageEvents, users } from "@/lib/db/schema";
 import { QUOTA_WINDOW_MS, type UsageAction } from "./usage.validators";
 
 export interface UsageWindow {
   used: number;
   // When the oldest event in the window ages out — i.e. when capacity returns.
   oldestAt: Date | null;
+}
+
+export async function isAccountVerified(db: Database, userId: string): Promise<boolean> {
+  const [account] = await db.select({ verified: users.emailVerified }).from(users).where(eq(users.id, userId)).limit(1);
+  return account?.verified === true;
 }
 
 export async function getUsageInWindow(
