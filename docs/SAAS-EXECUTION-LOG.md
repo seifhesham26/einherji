@@ -210,3 +210,32 @@ existing warning) and production build passed. Ten live quota tests passed
 separately. Author self-review checked shared/per-user status consistency,
 authenticated aggregate reads, inaccessible/error/loading states, secret-free
 client configuration, and the unchanged personal/default deployment settings.
+
+## 2026-10-10 - Recovery Code; Live Mail Deferred
+
+Implemented request/reset screens, input validation, generic responses,
+invalid/expired links and session revocation. Tests use the real Better Auth
+implementation with its memory adapter and fake transport. Mail readiness is
+checked before account lookup; missing production configuration cannot fall
+back to token logging. HTML user content is escaped and acknowledgements checked.
+
+Recovery mail uses Next.js after() so the provider round-trip does not block
+the public response. Failures log a fixed message, not account addresses, links,
+tokens or provider bodies. Origin validation is explicit because Better Auth
+relaxes it in test mode; the public HTTP test rejects an untrusted destination.
+
+TDD: six cases failed before recovery configuration, and a scheduling check
+failed before after(). Ten recovery checks and eight input checks now pass.
+The suite passes 522 tests with 69 skips. Lint has zero errors/one existing
+warning; Next 16.4 build passes. Browser fixtures verify desktop/mobile recovery,
+confirmation, mismatch, one submission, missing links and unavailable mail.
+
+Ruling: keep public responses generic on configured-provider failure and report
+the failure to the operator. Cost: users may need to retry after delivery is
+repaired. No durable mail retry queue; after() remains bounded by hosting duration.
+
+The primary environment has a mail key but no RESEND_FROM_EMAIL. The user
+explicitly deferred sender setup/live delivery and requested an upcoming-tasks
+document. No environment file changed, live email sent or existing account
+password reset. Actual Neon recovery/deployed delivery are unverified.
+See docs/SAAS-UPCOMING-TASKS.md. Phase 3 is not complete.

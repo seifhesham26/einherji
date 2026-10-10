@@ -82,6 +82,7 @@ export default function LoginForm() {
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign in
         </Button>
+        <Link href="/login/forgot-password" className="block text-center text-sm underline underline-offset-4">Forgot password?</Link>
       </form>
 
       {/* Dropped entirely rather than shown disabled while signups are closed.
