@@ -25,45 +25,62 @@ export default function PipelineStrip() {
       reading={`${openStages.length + TERMINAL_JOB_STATUSES.length} states`}
     >
       <div className="py-12 lg:py-16">
-        <h2 className="console-display max-w-[18ch] text-3xl leading-[1.05] sm:text-4xl lg:text-5xl">
-          A job is a thing you are working, not a search result.
+        <h2 className="console-display max-w-[22ch] text-3xl leading-[1.05] text-slate-900 sm:text-4xl lg:text-5xl">
+          A job is a thing you are working,{" "}
+          <span className="bg-gradient-to-r from-sky-600 via-cyan-600 to-blue-700 bg-clip-text text-transparent">
+            not a search result.
+          </span>
         </h2>
 
-        <p className="mt-5 max-w-[58ch] text-sm leading-relaxed text-[var(--console-dim)] sm:text-base">
+        <p className="mt-5 max-w-[58ch] text-sm leading-relaxed text-slate-600 sm:text-base">
           Every posting carries a status, a history of how it got there, and the note you wrote at
           the time. Months later, that is the only thing that can answer what you applied to and
           what happened next.
         </p>
 
-        <ol className="mt-10 flex flex-wrap items-stretch gap-px overflow-hidden border border-[var(--console-rule)] bg-[var(--console-rule)]">
-          {openStages.map((status, index) => (
-            <li
-              key={status}
-              className="flex min-w-[7.5rem] flex-1 flex-col justify-between gap-6 bg-[var(--console-panel)] px-4 py-4"
-              // Opacity climbing along the run is the whole visual: the further
-              // you get, the hotter the stage reads.
-              style={{ opacity: 0.55 + (index / (openStages.length - 1)) * 0.45 }}
-            >
-              <span className="console-mono text-[10px] tracking-[0.16em] text-[var(--console-dim)]">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <span className="text-[13px] font-medium leading-tight">
-                {JOB_STATUS_LABELS[status]}
-              </span>
-            </li>
-          ))}
-        </ol>
+        {/* Active Stage Tiles with Ice Progression */}
+        <div className="mt-10 overflow-hidden rounded-xl border border-sky-200/80 bg-white/70 p-2 shadow-[0_12px_32px_-4px_rgba(14,165,233,0.08)] backdrop-blur-md">
+          <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {openStages.map((status, index) => {
+              const isFinal = index === openStages.length - 1;
+              return (
+                <li
+                  key={status}
+                  className={cn(
+                    "group relative flex flex-col justify-between gap-6 rounded-lg border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(14,165,233,0.14)]",
+                    isFinal
+                      ? "border-sky-300/90 bg-gradient-to-br from-sky-50 to-cyan-100/90 shadow-[0_0_16px_rgba(14,165,233,0.15)]"
+                      : "border-sky-100/90 bg-white/90 hover:border-sky-200 hover:bg-sky-50/50",
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="console-mono text-[10px] font-bold tracking-[0.16em] text-sky-600">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    {isFinal && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[13px] font-semibold leading-tight text-slate-900 group-hover:text-sky-700">
+                      {JOB_STATUS_LABELS[status]}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
 
-        {/* Kept visually apart because they are apart: these are where a job
-            stops, and the product's whole argument is that stopping is
-            information rather than something to delete. */}
-        <div className="mt-px flex flex-wrap gap-px overflow-hidden border-x border-b border-[var(--console-rule)] bg-[var(--console-rule)]">
+        {/* Terminal Statuses */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-sky-100/90 bg-slate-50/80 p-3 shadow-xs">
+          <span className="console-mono mr-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Terminal states:
+          </span>
           {TERMINAL_JOB_STATUSES.map((status) => (
             <span
               key={status}
-              className={cn(
-                "console-mono flex-1 bg-[var(--console-panel)] px-4 py-3 text-[11px] uppercase tracking-[0.14em] text-[var(--console-dim)]",
-              )}
+              className="console-mono rounded-md border border-slate-200/80 bg-white/80 px-3 py-1.5 text-[11px] font-medium tracking-[0.1em] text-slate-600 shadow-2xs transition-colors hover:border-sky-200 hover:text-sky-700"
             >
               {JOB_STATUS_LABELS[status]}
             </span>

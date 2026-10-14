@@ -28,28 +28,35 @@ export default function AuthShell({ statement, support, children }: AuthShellPro
     <div className="console min-h-dvh lg:grid lg:grid-cols-[1.1fr_1fr]">
       {/* The brand half. Hidden on small screens, where it would push the form
           below the fold for no gain. */}
-      <div className="relative hidden flex-col justify-between overflow-hidden border-r border-[var(--console-rule)] p-12 lg:flex">
+      <div className="relative hidden flex-col justify-between overflow-hidden border-r border-sky-100/90 bg-gradient-to-b from-sky-50/50 via-white to-sky-50/30 p-12 lg:flex">
         <div className="console-grid pointer-events-none absolute inset-0" aria-hidden />
         <div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_10%_0%,rgb(255_95_31/0.08),transparent_55%)]"
+          className="animate-ice-aurora pointer-events-none absolute -top-20 -left-20 h-[450px] w-[500px] rounded-full bg-gradient-to-br from-sky-400/15 via-cyan-300/10 to-transparent blur-3xl"
           aria-hidden
         />
 
         <Link
           href="/"
-          className="console-mono relative text-sm font-semibold uppercase tracking-[0.22em] text-[var(--console-ink)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
+          className="group relative flex items-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
         >
-          Einherji
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-2xs">
+            <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+          </span>
+          <span className="console-mono text-sm font-bold uppercase tracking-[0.22em] text-slate-900 transition-colors group-hover:text-sky-600">
+            Einherji
+          </span>
         </Link>
 
         <div className="relative max-w-[22ch]">
-          <p className="console-display text-4xl leading-[1.02] xl:text-5xl">{statement}</p>
-          <p className="mt-5 max-w-[38ch] text-sm leading-relaxed text-[var(--console-dim)]">
+          <p className="console-display text-4xl leading-[1.02] text-slate-900 xl:text-5xl">
+            {statement}
+          </p>
+          <p className="mt-5 max-w-[38ch] text-sm leading-relaxed text-slate-600">
             {support}
           </p>
         </div>
 
-        <p className="console-mono relative text-[11px] tracking-[0.1em] text-[var(--console-dim)]">
+        <p className="console-mono relative text-[11px] tracking-[0.1em] text-slate-500">
           A job hunt runs on a queue, not a pile.
         </p>
       </div>
@@ -59,8 +66,11 @@ export default function AuthShell({ statement, support, children }: AuthShellPro
             never on screen twice. */}
         <Link
           href="/"
-          className="console-mono mb-10 text-sm font-semibold uppercase tracking-[0.22em] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)] lg:hidden"
+          className="console-mono mb-10 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)] lg:hidden"
         >
+          <span className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-2xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+          </span>
           Einherji
         </Link>
 

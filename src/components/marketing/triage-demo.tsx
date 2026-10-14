@@ -52,9 +52,9 @@ const HOLD_STEPS = 3;
 const KEYS = ["j", "k", "s", "x"] as const;
 
 function scoreTone(score: number): string {
-  if (score >= STRONG_SCORE) return "text-[var(--console-signal)]";
-  if (score >= FAIR_SCORE) return "text-[var(--console-ink)]";
-  return "text-[var(--console-dim)]";
+  if (score >= STRONG_SCORE) return "bg-sky-50 text-sky-700 border border-sky-300/80 shadow-[0_0_8px_rgba(14,165,233,0.15)]";
+  if (score >= FAIR_SCORE) return "bg-slate-100 text-slate-700 border border-slate-200";
+  return "bg-slate-50 text-slate-400 border border-slate-100";
 }
 
 export default function TriageDemo() {
@@ -86,6 +86,7 @@ export default function TriageDemo() {
   const firingKey = isFiring ? QUEUE[cursorIndex]?.verdict : null;
 
   const resolvedCount = QUEUE.filter((_, index) => isResolved(index)).length;
+  const progressPercent = Math.round((resolvedCount / QUEUE.length) * 100);
 
   function isResolved(index: number): boolean {
     if (index < cursorIndex) return true;
@@ -93,17 +94,27 @@ export default function TriageDemo() {
   }
 
   return (
-    <div className="border border-[var(--console-rule)] bg-[var(--console-panel)]">
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--console-rule)] px-4 py-2.5">
-        <span className="console-mono text-[11px] uppercase tracking-[0.2em] text-[var(--console-dim)]">
-          Today&apos;s queue
-        </span>
-        <span className="console-mono text-[11px] text-[var(--console-dim)]">
-          sorted by fit
-        </span>
+    <div className="overflow-hidden rounded-xl border border-sky-200/90 bg-white/90 shadow-[0_16px_40px_-8px_rgba(14,165,233,0.12),0_1px_3px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+      {/* Top Header Rail */}
+      <div className="flex items-center justify-between gap-4 border-b border-sky-100/90 bg-sky-50/60 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-600" />
+          </span>
+          <span className="console-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-800">
+            Today&apos;s queue
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded-full bg-sky-100/80 px-2 py-0.5 text-[10px] font-mono font-medium text-sky-700">
+            Fit Rank: Active
+          </span>
+        </div>
       </div>
 
-      <ul>
+      {/* Queue items */}
+      <ul className="divide-y divide-sky-100/70">
         {QUEUE.map((row, index) => {
           const resolved = isResolved(index);
           const isCursor = index === cursorIndex;
@@ -112,16 +123,16 @@ export default function TriageDemo() {
             <li
               key={row.company}
               className={cn(
-                "flex items-center gap-3 border-b border-[var(--console-rule)] px-4 py-2.5 transition-all duration-300 sm:gap-4",
-                // The cursor is an inset bar rather than a border, so a row never
-                // changes height as it moves and the list never shifts.
-                isCursor && !resolved && "bg-[var(--console-raised)] shadow-[inset_2px_0_0_var(--console-signal)]",
-                resolved && "opacity-35",
+                "flex items-center gap-3 px-4 py-3 transition-all duration-300 sm:gap-4",
+                isCursor &&
+                  !resolved &&
+                  "bg-gradient-to-r from-sky-50/90 via-sky-50/40 to-transparent shadow-[inset_3px_0_0_#0ea5e9]",
+                resolved && "opacity-40",
               )}
             >
               <span
                 className={cn(
-                  "console-mono w-8 shrink-0 text-right text-sm font-medium",
+                  "console-mono flex h-7 w-9 shrink-0 items-center justify-center rounded text-xs font-bold transition-all",
                   scoreTone(row.score),
                 )}
               >
@@ -129,45 +140,71 @@ export default function TriageDemo() {
               </span>
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium leading-tight">{row.title}</p>
-                <p className="console-mono truncate text-[11px] text-[var(--console-dim)]">
-                  {row.company} / {row.location}
+                <p className="truncate text-[13px] font-semibold leading-tight text-slate-900">
+                  {row.title}
+                </p>
+                <p className="console-mono truncate text-[11px] text-slate-500">
+                  {row.company} <span className="text-sky-300">/</span> {row.location}
                 </p>
               </div>
 
-              {/* The outcome, in the application's own words. Reserved width, so
-                  a row does not jump sideways the moment it resolves. */}
-              <span
-                className={cn(
-                  "console-mono w-[68px] shrink-0 text-right text-[10px] uppercase tracking-[0.14em]",
-                  resolved ? "text-[var(--console-dim)]" : "text-transparent",
+              {/* Status Outcome Badge */}
+              <div className="w-[84px] shrink-0 text-right">
+                {resolved ? (
+                  row.verdict === "s" ? (
+                    <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 border border-emerald-200/70">
+                      Shortlist
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 border border-slate-200/70">
+                      Dismissed
+                    </span>
+                  )
+                ) : isCursor ? (
+                  <span className="console-mono inline-block animate-pulse text-[10px] font-semibold tracking-wider uppercase text-sky-600">
+                    Evaluating
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-transparent">Pending</span>
                 )}
-              >
-                {row.verdict === "s" ? "Shortlist" : "Dismissed"}
-              </span>
+              </div>
             </li>
           );
         })}
       </ul>
 
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          {KEYS.map((key) => (
-            <kbd
-              key={key}
-              className={cn(
-                "console-mono flex h-6 w-6 items-center justify-center border border-[var(--console-rule)] text-[11px] lowercase text-[var(--console-dim)]",
-                firingKey === key && "console-strike border-[var(--console-signal)]",
-              )}
-            >
-              {key}
-            </kbd>
-          ))}
-        </div>
+      {/* Bottom control bar with 3D tactile keys and progress meter */}
+      <div className="border-t border-sky-100/90 bg-slate-50/80 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="console-mono mr-1 text-[10px] uppercase tracking-wider text-slate-400">
+              Keys:
+            </span>
+            {KEYS.map((key) => (
+              <kbd
+                key={key}
+                className={cn(
+                  "console-mono flex h-7 w-7 items-center justify-center rounded border border-sky-200/90 bg-white text-xs font-semibold lowercase text-slate-700 shadow-[0_2px_0_#bae6fd] transition-all",
+                  firingKey === key && "console-strike",
+                )}
+              >
+                {key}
+              </kbd>
+            ))}
+          </div>
 
-        <span className="console-mono text-[11px] text-[var(--console-dim)]">
-          {resolvedCount}/{QUEUE.length} cleared
-        </span>
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full bg-gradient-to-r from-sky-500 to-cyan-500 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <span className="console-mono text-[11px] font-medium text-slate-600">
+              {resolvedCount}/{QUEUE.length}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

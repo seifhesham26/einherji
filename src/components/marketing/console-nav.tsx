@@ -43,18 +43,23 @@ export default function ConsoleNav() {
 
       <header
         className={cn(
-          "fixed inset-x-0 top-0 z-50 transition-colors duration-300",
+          "fixed inset-x-0 top-0 z-50 transition-all duration-300",
           hasScrolled
-            ? "border-b border-[var(--console-rule)] bg-[var(--console-ground)]/90 backdrop-blur-md"
-            : "border-b border-transparent",
+            ? "border-b border-sky-100/80 bg-white/80 backdrop-blur-xl shadow-[0_4px_24px_-4px_rgba(14,165,233,0.08)]"
+            : "border-b border-transparent bg-transparent",
         )}
       >
         <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between gap-4 px-5 sm:px-8">
           <Link
             href="/"
-            className="console-mono text-sm font-semibold tracking-[0.22em] uppercase text-[var(--console-ink)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
+            className="group flex items-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
           >
-            Einherji
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-[0_2px_8px_rgba(14,165,233,0.35)] transition-transform group-hover:scale-105">
+              <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+            </span>
+            <span className="console-mono text-sm font-bold tracking-[0.22em] uppercase text-[var(--console-ink)] transition-colors group-hover:text-sky-600">
+              Einherji
+            </span>
           </Link>
 
           <div className="flex items-center gap-1 sm:gap-3">
@@ -64,7 +69,7 @@ export default function ConsoleNav() {
             {!session && ARE_SIGNUPS_OPEN && (
               <Link
                 href="/login"
-                className="console-mono px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-[var(--console-dim)] transition-colors hover:text-[var(--console-ink)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
+                className="console-mono rounded-md px-3 py-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--console-dim)] transition-colors hover:bg-sky-50/60 hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
               >
                 Sign in
               </Link>
@@ -72,7 +77,7 @@ export default function ConsoleNav() {
 
             <Link
               href={primaryAction.href}
-              className="console-mono border border-[var(--console-signal)] bg-[var(--console-signal)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#06080c] transition-colors hover:bg-transparent hover:text-[var(--console-signal)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
+              className="console-mono ice-shimmer group relative overflow-hidden rounded-md border border-sky-400/80 bg-gradient-to-r from-sky-600 to-cyan-600 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white shadow-[0_2px_12px_rgba(14,165,233,0.25)] transition-all hover:shadow-[0_4px_20px_rgba(14,165,233,0.4)] hover:brightness-105 active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)]"
             >
               {primaryAction.label}
             </Link>

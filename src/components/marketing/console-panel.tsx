@@ -41,18 +41,21 @@ export default function ConsolePanel({
       ref={ref}
       id={id}
       className={cn(
-        "border-t border-[var(--console-rule)]",
+        "relative border-t border-sky-100/90",
         isRevealed && "console-revealed",
         className,
       )}
     >
       <div className="mx-auto max-w-[1400px] px-5 sm:px-8">
-        <div className="flex items-baseline justify-between gap-4 border-b border-[var(--console-rule)] py-3">
-          <span className="console-mono text-[11px] uppercase tracking-[0.2em] text-[var(--console-dim)]">
-            {label}
-          </span>
+        <div className="flex items-center justify-between gap-4 border-b border-sky-100/90 py-3.5">
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shadow-[0_0_6px_#38bdf8]" />
+            <span className="console-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-800">
+              {label}
+            </span>
+          </div>
           {reading && (
-            <span className="console-mono text-[11px] tracking-[0.1em] text-[var(--console-dim)]">
+            <span className="console-mono rounded-full border border-sky-200/70 bg-sky-50/80 px-2.5 py-0.5 text-[11px] font-medium tracking-[0.08em] text-sky-700">
               {reading}
             </span>
           )}

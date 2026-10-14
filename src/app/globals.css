@@ -145,25 +145,26 @@
    Ground is blue-biased rather than neutral black. Pure #000 has no depth and
    nothing reads as lit against it. */
 
+/* ─── The console surface: White Ice Edition ─────────────────────────────────
+   A high-precision, frosted crystalline instrument surface.
+   Grounded in crisp, luminous arctic white with cool-spectrum reflections,
+   glacial cyan/azure accents, frosted glass panels, and obsidian typography. */
+
 .console {
-  --console-ground: #06080c;
-  --console-panel: #0b0f16;
-  --console-raised: #111826;
-  --console-rule: #1b2431;
-  --console-ink: #e4eaf2;
-  --console-dim: #78859a;
-  /* The one accent. Sodium flare, and it means heat: a high score, a live key,
-     the primary action. Nothing else on the page is coloured. */
-  --console-signal: #ff5f1f;
+  --console-ground: #f8fbff;
+  --console-panel: #ffffff;
+  --console-raised: #f0f7ff;
+  --console-rule: #dbeafe;
+  --console-ink: #0a192f;
+  --console-dim: #4d6582;
+  /* Glacial Cyan / Electric Ice Azure accent */
+  --console-signal: #0284c7;
+  --console-signal-hover: #0369a1;
+  --console-signal-light: #e0f2fe;
+  --console-ice-glow: rgba(14, 165, 233, 0.25);
+  --console-frost-border: rgba(186, 230, 253, 0.65);
+  --console-frost-bg: rgba(255, 255, 255, 0.82);
 
-  /* The app's own semantic tokens, remapped onto this palette. Every shadcn
-     component rendered inside a console surface - the auth forms are the whole
-     reason this exists - then wears it without a single per-component override,
-     and without the app's chrome knowing anything about the console.
-
-     Sharp corners throughout: an instrument does not have rounded fields, and
-     one radius system per surface is the difference between deliberate and
-     assembled. */
   --background: var(--console-ground);
   --foreground: var(--console-ink);
   --card: var(--console-panel);
@@ -171,7 +172,7 @@
   --popover: var(--console-panel);
   --popover-foreground: var(--console-ink);
   --primary: var(--console-signal);
-  --primary-foreground: #06080c;
+  --primary-foreground: #ffffff;
   --secondary: var(--console-raised);
   --secondary-foreground: var(--console-ink);
   --muted: var(--console-raised);
@@ -181,22 +182,19 @@
   --border: var(--console-rule);
   --input: var(--console-rule);
   --ring: var(--console-signal);
-  /* Lighter than the app's red, because this one has to clear AA against a
-     near-black ground rather than a white one. */
-  --destructive: #ff6b6b;
-  --radius: 0px;
+  --destructive: #ef4444;
+  --radius: 0.5rem;
 
   background-color: var(--console-ground);
   color: var(--console-ink);
 }
 
-/* The drafting grid the whole page sits on. Faint enough to read as a surface
-   rather than as lines, and fixed so it does not scroll with the content. */
+/* The drafting grid the whole page sits on in crisp glacial cyan */
 .console-grid {
   background-image:
-    linear-gradient(to right, rgb(255 255 255 / 0.022) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.022) 1px, transparent 1px);
-  background-size: 64px 64px;
+    linear-gradient(to right, rgb(14 165 233 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(14 165 233 / 0.045) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 /* Wide and heavy. The width axis is the point: it is what separates this from
@@ -226,14 +224,68 @@
 }
 
 /* The one thing that moves on its own: the key that just fired in the hero
-   demo. It is feedback for a keystroke, which is the whole subject. */
+   demo, striking with electric glacial azure feedback. */
 @keyframes console-strike {
-  0%   { background-color: var(--console-signal); color: #06080c; }
-  100% { background-color: transparent; }
+  0%   { background-color: var(--console-signal); color: #ffffff; box-shadow: 0 0 16px rgba(14, 165, 233, 0.6); border-color: #38bdf8; transform: translateY(1px); }
+  100% { background-color: #ffffff; color: var(--console-dim); box-shadow: none; transform: translateY(0); }
 }
 
 .console-strike {
-  animation: console-strike 0.5s ease-out;
+  animation: console-strike 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Ambient glacial drift animations */
+@keyframes ice-aurora {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
+  50% { transform: translate(24px, -16px) scale(1.06); opacity: 0.85; }
+}
+
+.animate-ice-aurora {
+  animation: ice-aurora 12s ease-in-out infinite;
+}
+
+@keyframes ice-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.ice-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.ice-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.6),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: ice-shimmer 3.5s infinite;
+}
+
+/* Glassmorphism frost card utility */
+.ice-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(186, 230, 253, 0.65);
+  box-shadow: 0 4px 24px -2px rgba(14, 165, 233, 0.06), 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.ice-glass-hover {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ice-glass-hover:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(56, 189, 248, 0.6);
+  box-shadow: 0 12px 32px -4px rgba(14, 165, 233, 0.14), 0 2px 6px rgba(15, 23, 42, 0.04);
+  transform: translateY(-2px);
 }
 
 .scrollbar-none {

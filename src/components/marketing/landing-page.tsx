@@ -20,7 +20,7 @@ import ConsoleFooter from "./console-footer";
  */
 export default function LandingPage() {
   return (
-    <div className="console relative min-h-dvh overflow-x-hidden">
+    <div className="console relative min-h-dvh overflow-x-hidden bg-gradient-to-b from-[#f8fbff] via-[#f0f7ff]/50 to-[#f8fbff]">
       <ConsoleNav />
 
       <main>
