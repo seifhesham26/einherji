@@ -58,7 +58,7 @@ export default function JobsSelectionBar({
 
   return (
     <div
-      className="sticky top-2 z-20 flex flex-wrap items-center gap-3 rounded-xl bg-card/95 p-3 ring-1 ring-foreground/10 shadow-sm supports-backdrop-filter:backdrop-blur-sm"
+      className="sticky top-2 z-20 flex flex-wrap items-center gap-3 rounded-xl bg-card/90 backdrop-blur-md p-3 ring-1 ring-sky-300/80 dark:ring-sky-700/80 shadow-[0_8px_30px_rgba(14,165,233,0.15)]"
       role="region"
       aria-label="Selected jobs"
     >

@@ -8,13 +8,14 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        default:
+          "bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow-[0_2px_8px_rgba(14,165,233,0.25)] hover:from-sky-500 hover:to-cyan-500 hover:shadow-[0_4px_16px_rgba(14,165,233,0.38)] active:translate-y-px [a]:hover:opacity-95",
         outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border-sky-200/80 dark:border-sky-800/80 bg-card/80 hover:bg-sky-50/80 dark:hover:bg-sky-950/60 hover:border-sky-300 dark:hover:border-sky-700 hover:text-sky-700 dark:hover:text-sky-300 shadow-2xs aria-expanded:bg-sky-50 dark:aria-expanded:bg-sky-950/60",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-sky-50/90 dark:bg-sky-950/70 text-sky-800 dark:text-sky-200 border border-sky-200/60 dark:border-sky-800/60 hover:bg-sky-100/90 dark:hover:bg-sky-900/60 aria-expanded:bg-sky-100 dark:aria-expanded:bg-sky-900/60",
         ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+          "hover:bg-sky-50/60 dark:hover:bg-sky-950/40 hover:text-sky-700 dark:hover:text-sky-300 aria-expanded:bg-sky-50 dark:aria-expanded:bg-sky-950/40",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",

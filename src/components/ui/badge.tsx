@@ -9,15 +9,16 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        default:
+          "bg-sky-50 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border-sky-300/80 dark:border-sky-700/80 shadow-[0_0_8px_rgba(14,165,233,0.12)] [a]:hover:bg-sky-100/80 dark:[a]:hover:bg-sky-900/80",
         secondary:
-          "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
+          "bg-sky-50/60 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-sky-100 dark:border-slate-800 [a]:hover:bg-sky-100/60",
         destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+          "bg-destructive/10 text-destructive border-destructive/20 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
         outline:
-          "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
+          "border-sky-200/80 dark:border-sky-800/80 text-slate-700 dark:text-slate-300 [a]:hover:bg-sky-50/80 dark:[a]:hover:bg-sky-950/50 [a]:hover:text-sky-700 dark:[a]:hover:text-sky-300",
         ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
+          "hover:bg-sky-50/60 hover:text-sky-700 dark:hover:bg-sky-950/50 dark:hover:text-sky-300",
         link: "text-primary underline-offset-4 hover:underline",
       },
     },

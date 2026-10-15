@@ -30,11 +30,11 @@ const INDUSTRIES = [
 function SectionHeader({ icon, title, description }: { icon: React.ReactNode; title: string; description?: string }) {
   return (
     <div className="flex items-start gap-3 mb-5">
-      <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary shrink-0">
+      <div className="mt-0.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 p-2 text-sky-600 dark:text-sky-400 ring-1 ring-sky-300/80 dark:ring-sky-700/60 shadow-[0_0_12px_rgba(14,165,233,0.18)] shrink-0">
         {icon}
       </div>
       <div>
-        <p className="font-semibold text-sm">{title}</p>
+        <p className="font-semibold text-sm text-slate-900 dark:text-slate-100">{title}</p>
         {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
       </div>
     </div>
@@ -43,7 +43,7 @@ function SectionHeader({ icon, title, description }: { icon: React.ReactNode; ti
 
 function SectionCard({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-border bg-card p-6 ${className ?? ""}`}>
+    <div className={`rounded-2xl border border-sky-100/90 dark:border-sky-900/40 bg-card/90 backdrop-blur-sm p-6 shadow-[0_4px_20px_-2px_rgba(14,165,233,0.05)] ring-1 ring-sky-200/70 dark:ring-sky-800/50 ${className ?? ""}`}>
       {children}
     </div>
   );
@@ -147,7 +147,7 @@ export default function CriteriaForm() {
           {hasUnsavedChanges && (
             <span className="text-xs text-amber-700 dark:text-amber-400">Unsaved changes</span>
           )}
-          <Button type="submit" disabled={saveCriteria.isPending} className="gap-2">
+          <Button type="submit" disabled={saveCriteria.isPending} className="gap-2 ice-shimmer rounded-xl">
             {saveCriteria.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -165,7 +165,7 @@ export default function CriteriaForm() {
         <div className="space-y-6 lg:col-span-3">
 
           {/* CV Upload */}
-          <SectionCard className="bg-gradient-to-br from-primary/5 to-card">
+          <SectionCard className="bg-gradient-to-br from-sky-50/70 via-card to-card dark:from-sky-950/30 dark:via-card dark:to-card border-sky-200/80 dark:border-sky-800/70">
             <SectionHeader
               icon={<Sparkles className="h-4 w-4" />}
               title="Import from CV"
@@ -277,8 +277,10 @@ export default function CriteriaForm() {
                     <button key={industry} type="button" onClick={() => toggleIndustry(industry)}>
                       <Badge
                         variant={selectedIndustries.includes(industry) ? "default" : "outline"}
-                        className={`cursor-pointer transition-all ${
-                          selectedIndustries.includes(industry) ? "" : "hover:border-primary/50 hover:text-foreground"
+                        className={`cursor-pointer transition-all rounded-lg px-2.5 py-1 ${
+                          selectedIndustries.includes(industry)
+                            ? "bg-gradient-to-r from-sky-500 to-cyan-600 text-white shadow-[0_0_8px_rgba(14,165,233,0.35)] border-transparent"
+                            : "border-sky-200/80 dark:border-sky-800/70 hover:border-sky-400 hover:bg-sky-50/50 text-slate-700 dark:text-slate-300"
                         }`}
                       >
                         {industry}
@@ -381,14 +383,10 @@ export default function CriteriaForm() {
       {/* This form is two full screens tall on a laptop, and the only Save was
           at the very top — editing the pitch at the bottom meant scrolling back
           up to keep it. The bar follows you down, and only appears once there is
-          something to save.
-
-          The old confirmation was a permanent "Saved." line pinned under the
-          right column, which stayed on screen for the rest of the session and
-          said nothing the toast hadn't already said. */}
+          something to save. */}
       {hasUnsavedChanges && (
-        <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-          <p className="text-sm text-muted-foreground">You have unsaved changes.</p>
+        <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-sky-200/80 dark:border-sky-800/70 bg-card/90 px-4 py-3 backdrop-blur-md shadow-[0_-8px_24px_rgba(14,165,233,0.08)] sm:-mx-6 sm:px-6">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">You have unsaved changes.</p>
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -396,10 +394,11 @@ export default function CriteriaForm() {
               size="sm"
               disabled={saveCriteria.isPending}
               onClick={() => form.reset()}
+              className="rounded-xl"
             >
               Discard
             </Button>
-            <Button type="submit" size="sm" disabled={saveCriteria.isPending} className="gap-2">
+            <Button type="submit" size="sm" disabled={saveCriteria.isPending} className="gap-2 ice-shimmer rounded-xl">
               {saveCriteria.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

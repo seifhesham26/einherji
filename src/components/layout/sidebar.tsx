@@ -63,34 +63,40 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         // permanent column and calling it a dialog would be a lie.
         {...(isOpen ? { role: "dialog", "aria-modal": true, "aria-label": "Main menu" } : {})}
         className={cn(
-          "w-56 shrink-0 border-r border-border bg-card flex flex-col h-dvh",
+          "w-56 shrink-0 border-r border-sky-100/90 dark:border-sky-900/40 bg-card/85 backdrop-blur-xl flex flex-col h-dvh",
           // Off-canvas below md, a normal column from md up.
           "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {/* Logo */}
-        <div className="px-4 py-5 border-b border-border flex items-center gap-2">
-          <div className="rounded-md bg-primary/10 p-1 shrink-0">
-            <BrainCircuit className="h-4 w-4 text-primary" />
+        <div className="px-4 py-5 border-b border-sky-100/80 dark:border-sky-900/40 flex items-center gap-2.5">
+          <div className="rounded-lg bg-gradient-to-br from-sky-500 to-cyan-600 p-1.5 shadow-[0_0_12px_rgba(14,165,233,0.35)] shrink-0">
+            <BrainCircuit className="h-4 w-4 text-white" />
           </div>
-          <span className="text-sm font-semibold tracking-tight truncate">Einherji</span>
+          <span className="console-mono text-xs font-bold uppercase tracking-[0.18em] text-slate-900 dark:text-slate-100 truncate">
+            Einherji
+          </span>
+          <span className="relative flex h-1.5 w-1.5 ml-auto">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-500" />
+          </span>
           <button
             onClick={onClose}
-            className="ml-auto shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
+            className="ml-2 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
             aria-label="Close menu"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <nav aria-label="Main" className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+        <nav aria-label="Main" className="flex-1 px-2.5 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => (
             <SidebarLink key={item.href} {...item} pathname={pathname} onNavigate={onClose} />
           ))}
         </nav>
 
-        <div className="px-2 pb-2">
+        <div className="px-2.5 pb-2">
           <SidebarLink
             href="/settings"
             label="Settings"
@@ -101,18 +107,18 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         {/* User profile */}
-        <div className="px-3 py-3 border-t border-border">
+        <div className="px-3 py-3 border-t border-sky-100/80 dark:border-sky-900/40 bg-sky-50/40 dark:bg-sky-950/20">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-              <span className="text-xs font-semibold text-primary">{initials}</span>
+            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-sky-500/20 to-cyan-500/20 border border-sky-200/80 dark:border-sky-800/80 flex items-center justify-center shrink-0 shadow-2xs">
+              <span className="console-mono text-xs font-semibold text-sky-700 dark:text-sky-300">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate">{user?.name ?? "—"}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email ?? ""}</p>
+              <p className="text-xs font-medium truncate text-slate-900 dark:text-slate-100">{user?.name ?? "—"}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? ""}</p>
             </div>
             <button
               onClick={handleSignOut}
-              className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-sky-100/60 dark:hover:bg-sky-900/40 hover:text-sky-700 dark:hover:text-sky-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               aria-label="Sign out"
               title="Sign out"
             >
@@ -151,13 +157,20 @@ function SidebarLink({ href, label, icon: Icon, pathname, onNavigate }: SidebarL
       onClick={onNavigate}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         isActive
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+          ? "bg-sky-50/90 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60 shadow-[inset_3px_0_0_#0ea5e9,0_1px_4px_rgba(14,165,233,0.06)] font-semibold"
+          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-sky-50/50 dark:hover:bg-sky-950/30",
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon
+        className={cn(
+          "h-4 w-4 shrink-0 transition-colors",
+          isActive
+            ? "text-sky-600 dark:text-sky-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.4)]"
+            : "text-slate-400 dark:text-slate-500",
+        )}
+      />
       {label}
     </Link>
   );

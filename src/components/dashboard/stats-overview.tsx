@@ -30,16 +30,21 @@ function StatCard({ icon, label, value, colorClass, href }: StatCardProps) {
   return (
     <Link
       href={href}
-      className="group rounded-xl border border-border bg-card p-4 space-y-3 transition-colors hover:border-foreground/20 hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="group relative overflow-hidden rounded-xl border border-sky-200/70 dark:border-sky-800/60 bg-card/90 backdrop-blur-sm p-4 space-y-3 transition-all duration-200 hover:border-sky-400 dark:hover:border-sky-500 hover:shadow-[0_8px_24px_rgba(14,165,233,0.12)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      <div className={cn("inline-flex rounded-lg p-2", colorClass)}>{icon}</div>
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-sky-400 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className={cn("inline-flex rounded-lg p-2 border border-sky-200/50 dark:border-sky-800/50 shadow-2xs", colorClass)}>
+        {icon}
+      </div>
       <div>
         {value === undefined ? (
           <Skeleton className="h-8 w-12" />
         ) : (
-          <p className="text-2xl font-semibold tabular-nums">{value}</p>
+          <p className="console-mono text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 tabular-nums">
+            {value}
+          </p>
         )}
-        <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">{label}</p>
       </div>
     </Link>
   );

@@ -49,10 +49,10 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8">
+    <div className="w-full space-y-6">
       <div className="space-y-1">
-        <h2 className="console-display text-2xl leading-tight">Welcome back</h2>
-        <p className="text-sm text-muted-foreground">Sign in to your Einherji account</p>
+        <h2 className="console-display text-2xl leading-tight text-slate-900 dark:text-slate-100">Welcome back</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Sign in to your Einherji account</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -78,19 +78,19 @@ export default function LoginForm() {
           />
           {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
         </div>
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button type="submit" className="w-full ice-shimmer font-semibold uppercase tracking-wider text-xs" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Sign in
         </Button>
-        <Link href="/login/forgot-password" className="block text-center text-sm underline underline-offset-4">Forgot password?</Link>
+        <Link href="/login/forgot-password" className="block text-center text-xs text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-colors">Forgot password?</Link>
       </form>
 
       {/* Dropped entirely rather than shown disabled while signups are closed.
           A link to a door that is shut is worse than no link. */}
       {ARE_SIGNUPS_OPEN && (
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-xs text-slate-500 dark:text-slate-400">
           No account yet?{" "}
-          <Link href="/register" className="text-foreground font-medium underline-offset-4 hover:underline">
+          <Link href="/register" className="text-sky-600 dark:text-sky-400 font-semibold hover:underline">
             Create one
           </Link>
         </p>

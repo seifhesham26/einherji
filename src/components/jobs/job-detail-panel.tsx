@@ -144,6 +144,7 @@ export default function JobDetailPanel({
                   size="sm"
                   disabled={setStatus.isPending}
                   onClick={() => moveTo(quickAction.next)}
+                  className="ice-shimmer rounded-xl gap-1.5 shadow-xs"
                 >
                   {setStatus.isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -158,6 +159,7 @@ export default function JobDetailPanel({
                   variant="outline"
                   disabled={setStatus.isPending}
                   onClick={() => moveTo("new")}
+                  className="rounded-xl gap-1.5"
                 >
                   <CircleSlash className="h-3.5 w-3.5" aria-hidden />
                   Reopen
@@ -316,7 +318,7 @@ export default function JobDetailPanel({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="text-[11px] font-bold uppercase tracking-wider text-sky-700/80 dark:text-sky-400/80">
         {title}
       </h3>
       {children}
@@ -334,12 +336,12 @@ function DetailFact({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0">
-      <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-        <span aria-hidden>{icon}</span>
+    <div className="min-w-0 rounded-xl border border-sky-100/80 dark:border-sky-900/40 bg-sky-50/40 dark:bg-sky-950/20 p-2.5">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        <span aria-hidden className="text-sky-500">{icon}</span>
         {label}
       </p>
-      <p className="truncate text-xs capitalize">{children}</p>
+      <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100 mt-0.5 capitalize">{children}</p>
     </div>
   );
 }

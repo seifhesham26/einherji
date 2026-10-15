@@ -92,8 +92,8 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
       <CardHeader className="pb-3 border-b border-border">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-sm font-semibold text-primary" aria-hidden>
+            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-sky-500/15 to-cyan-500/15 border border-sky-200/70 dark:border-sky-800/70 flex items-center justify-center shrink-0 shadow-2xs">
+              <span className="console-mono text-sm font-bold text-sky-700 dark:text-sky-300" aria-hidden>
                 {(item.lead?.firstName?.[0] ?? "?").toUpperCase()}
               </span>
             </div>
@@ -182,11 +182,11 @@ export default function ApprovalCard({ item, onNext }: ApprovalCardProps) {
 
 function Shortcut({ keyLabel, action }: { keyLabel: string; action: string }) {
   return (
-    <span className="flex items-center gap-1">
-      <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium">
+    <span className="flex items-center gap-1.5 font-medium">
+      <kbd className="console-mono inline-flex h-5 min-w-5 items-center justify-center rounded border border-sky-200/90 dark:border-sky-800 bg-white dark:bg-slate-900 px-1.5 text-[10px] font-semibold text-slate-700 dark:text-sky-300 shadow-[0_1.5px_0_#bae6fd] dark:shadow-[0_1.5px_0_#0284c7]">
         {keyLabel}
       </kbd>
-      {action}
+      <span className="text-[11px] text-slate-500 dark:text-slate-400">{action}</span>
     </span>
   );
 }

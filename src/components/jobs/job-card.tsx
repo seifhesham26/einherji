@@ -48,8 +48,8 @@ interface JobCardProps {
 function CompanyAvatar({ name }: { name: string }) {
   const letter = name[0]?.toUpperCase() ?? "?";
   return (
-    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-      <span className="text-sm font-semibold text-primary" aria-hidden>
+    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-sky-500/15 to-cyan-500/20 border border-sky-200/70 dark:border-sky-800/70 flex items-center justify-center shrink-0 shadow-2xs">
+      <span className="console-mono text-sm font-bold text-sky-700 dark:text-sky-300" aria-hidden>
         {letter}
       </span>
     </div>
@@ -101,7 +101,7 @@ export default function JobCard({
       data-selected={isSelected || undefined}
       data-cursor={isCursor || undefined}
       onClick={onOpenDetail}
-      className={`flex flex-col rounded-xl transition-all hover:shadow-md data-selected:ring-2 data-selected:ring-primary data-selected:bg-primary/[0.03] data-cursor:ring-2 data-cursor:ring-primary/40 ${
+      className={`flex flex-col rounded-xl border border-sky-200/70 dark:border-sky-800/60 bg-card/90 backdrop-blur-sm transition-all duration-200 hover:border-sky-400 dark:hover:border-sky-500 hover:shadow-[0_8px_24px_rgba(14,165,233,0.12)] hover:-translate-y-0.5 data-selected:ring-2 data-selected:ring-sky-500 data-selected:bg-sky-50/40 dark:data-selected:bg-sky-950/40 data-cursor:ring-2 data-cursor:ring-sky-400/50 data-cursor:shadow-[inset_3px_0_0_#0ea5e9] ${
         onOpenDetail ? "cursor-pointer" : ""
       } ${isDismissed || looksClosed ? "opacity-60 hover:opacity-100" : ""}`}
     >

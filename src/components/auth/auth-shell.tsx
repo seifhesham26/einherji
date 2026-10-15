@@ -61,20 +61,28 @@ export default function AuthShell({ statement, support, children }: AuthShellPro
         </p>
       </div>
 
-      <div className="flex min-h-dvh flex-col items-center justify-center px-6 py-12 lg:min-h-0">
-        {/* The wordmark only appears here when the brand half is hidden, so it is
-            never on screen twice. */}
-        <Link
-          href="/"
-          className="console-mono mb-10 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)] lg:hidden"
-        >
-          <span className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-2xs">
-            <span className="h-1.5 w-1.5 rounded-full bg-white" />
-          </span>
-          Einherji
-        </Link>
+      <div className="relative flex min-h-dvh flex-col items-center justify-center px-6 py-12 lg:min-h-0 overflow-hidden bg-background">
+        <div className="console-grid pointer-events-none absolute inset-0 opacity-40 dark:opacity-20" aria-hidden />
+        <div
+          className="animate-ice-aurora pointer-events-none absolute -bottom-20 -right-20 h-[400px] w-[400px] rounded-full bg-gradient-to-tl from-sky-400/12 via-cyan-300/8 to-transparent blur-3xl"
+          aria-hidden
+        />
 
-        {children}
+        <div className="relative z-10 w-full max-w-sm rounded-2xl border border-sky-200/70 dark:border-sky-800/60 bg-card/90 backdrop-blur-md p-8 shadow-[0_8px_32px_rgba(14,165,233,0.08)]">
+          {/* The wordmark only appears here when the brand half is hidden, so it is
+              never on screen twice. */}
+          <Link
+            href="/"
+            className="console-mono mb-8 flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-slate-900 dark:text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--console-signal)] lg:hidden"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-2xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+            </span>
+            Einherji
+          </Link>
+
+          {children}
+        </div>
       </div>
     </div>
   );

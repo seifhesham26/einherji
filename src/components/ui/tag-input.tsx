@@ -75,18 +75,18 @@ export function TagInput({ value, onChange, placeholder, className, suggestions 
     <div className="relative">
       <div
         className={cn(
-          "flex flex-wrap gap-1.5 rounded-md border border-input bg-background px-3 py-2 min-h-10 focus-within:ring-1 focus-within:ring-ring cursor-text",
+          "flex flex-wrap gap-1.5 rounded-lg border border-sky-200/80 dark:border-sky-800/70 bg-card/60 dark:bg-card/40 px-3 py-2 min-h-10 focus-within:ring-2 focus-within:ring-sky-400/40 focus-within:border-sky-400 cursor-text transition-all",
           className
         )}
         onClick={() => inputRef.current?.focus()}
       >
         {value.map((tag) => (
-          <Badge key={tag} variant="secondary" className="gap-1 pr-1 text-xs shrink-0">
+          <Badge key={tag} variant="secondary" className="gap-1 pr-1 text-xs shrink-0 bg-sky-50/90 text-sky-700 border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60">
             {tag}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onChange(value.filter((t) => t !== tag)); }}
-              className="hover:text-destructive transition-colors"
+              className="hover:text-destructive transition-colors ml-0.5"
             >
               <X className="h-3 w-3" />
             </button>
@@ -112,7 +112,7 @@ export function TagInput({ value, onChange, placeholder, className, suggestions 
       </div>
 
       {isDropdownOpen && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-sky-200/80 dark:border-sky-800/80 bg-popover/95 backdrop-blur-md shadow-[0_8px_24px_rgba(14,165,233,0.12)]">
           <ul className="py-1 max-h-48 overflow-y-auto">
             {filteredSuggestions.map((suggestion, index) => (
               <li
@@ -121,8 +121,8 @@ export function TagInput({ value, onChange, placeholder, className, suggestions 
                 className={cn(
                   "px-3 py-1.5 text-sm cursor-pointer transition-colors",
                   index === activeIndex
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-accent hover:text-accent-foreground"
+                    ? "bg-sky-100/80 text-sky-950 dark:bg-sky-950/60 dark:text-sky-100"
+                    : "hover:bg-sky-50 dark:hover:bg-sky-950/40"
                 )}
               >
                 {suggestion}

@@ -67,10 +67,10 @@ export default function RegisterForm() {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8">
+    <div className="w-full space-y-6">
       <div className="space-y-1">
-        <h2 className="console-display text-2xl leading-tight">Create your account</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="console-display text-2xl leading-tight text-slate-900 dark:text-slate-100">Create your account</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Two minutes, then point it at what you are looking for.
         </p>
       </div>
@@ -129,15 +129,15 @@ export default function RegisterForm() {
           </div>
         </div>
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
+        <Button type="submit" className="w-full ice-shimmer font-semibold uppercase tracking-wider text-xs" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Create account
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="text-center text-xs text-slate-500 dark:text-slate-400">
         Already have an account?{" "}
-        <Link href="/login" className="text-foreground font-medium underline-offset-4 hover:underline">
+        <Link href="/login" className="text-sky-600 dark:text-sky-400 font-semibold hover:underline">
           Sign in
         </Link>
       </p>

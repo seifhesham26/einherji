@@ -52,11 +52,11 @@ export default function KanbanBoard() {
           ))}
         </div>
       ) : leads.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm font-medium">
+        <div className="rounded-2xl border border-dashed border-sky-300/60 dark:border-sky-800/60 bg-sky-50/30 dark:bg-sky-950/15 py-16 text-center">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
             {bucketId ? "Nothing in this bucket yet" : "No contacts to track"}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Contacts appear here as soon as you add them on the Leads page.
           </p>
         </div>

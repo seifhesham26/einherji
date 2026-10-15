@@ -67,14 +67,16 @@ export default function LeadKanbanCard({ lead, index }: LeadKanbanCardProps) {
           aria-label={`${leadName}, ${lead.company}. Drag to change status.`}
         >
           <Card
-            className={`cursor-grab active:cursor-grabbing transition-all rounded-lg ${
-              snapshot.isDragging ? "shadow-lg ring-1 ring-primary/30 rotate-1" : "hover:shadow-sm"
+            className={`cursor-grab active:cursor-grabbing transition-all rounded-xl border border-sky-200/70 dark:border-sky-800/60 bg-card/95 backdrop-blur-sm ${
+              snapshot.isDragging
+                ? "shadow-[0_12px_32px_rgba(14,165,233,0.25)] ring-2 ring-sky-500 rotate-1"
+                : "hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-[0_4px_16px_rgba(14,165,233,0.08)]"
             }`}
           >
             <CardContent className="p-3 space-y-2.5">
               <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-semibold text-primary" aria-hidden>
+                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-sky-500/15 to-cyan-500/15 border border-sky-200/70 dark:border-sky-800/70 flex items-center justify-center shrink-0 shadow-2xs">
+                  <span className="console-mono text-xs font-bold text-sky-700 dark:text-sky-300" aria-hidden>
                     {getInitials(lead.firstName, lead.lastName)}
                   </span>
                 </div>

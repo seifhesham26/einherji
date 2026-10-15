@@ -73,7 +73,7 @@ export default function AddLeadDialog({ defaultBucketId }: AddLeadDialogProps = 
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <Button
         size="sm"
-        className="gap-2"
+        className="gap-2 ice-shimmer rounded-xl"
         onClick={() => {
           setBucketId(defaultBucketId ?? "");
           setIsOpen(true);
@@ -171,7 +171,7 @@ export default function AddLeadDialog({ defaultBucketId }: AddLeadDialogProps = 
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={createLead.isPending} className="gap-2">
+            <Button type="submit" disabled={createLead.isPending} className="gap-2 ice-shimmer rounded-xl">
               {createLead.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Add lead
             </Button>

@@ -112,10 +112,10 @@ export default function BucketBar({
       </div>
 
       {selected && preset && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-200/80 dark:border-sky-800/80 bg-sky-50/50 dark:bg-sky-950/30 px-3.5 py-2.5 backdrop-blur-sm shadow-sm">
           <div className="min-w-0 space-y-1 text-xs text-muted-foreground">
             <p>
-              <span className="font-medium text-foreground">{preset.label}</span>
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{preset.label}</span>
               {selected.keywords.length > 0 && <> · {selected.keywords.join(", ")}</>}
               {selected.locations.length > 0 && <> · {selected.locations.join(", ")}</>}
             </p>

@@ -72,13 +72,13 @@ export default function BucketSourcePicker({ value, onChange }: BucketSourcePick
                     onClick={() => toggle(source.id)}
                     title={source.description}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors",
+                      "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs transition-all",
                       isSelected
-                        ? "border-primary bg-primary/5 font-medium"
-                        : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40",
+                        ? "border-sky-400 bg-sky-50/80 dark:bg-sky-950/50 font-semibold text-sky-950 dark:text-sky-100 shadow-[0_0_10px_rgba(14,165,233,0.18)]"
+                        : "border-sky-100/90 dark:border-sky-900/40 text-slate-600 dark:text-slate-400 hover:border-sky-300 hover:bg-sky-50/40 dark:hover:bg-sky-950/20",
                     )}
                   >
-                    {isSelected && <Check className="h-3 w-3 text-primary shrink-0" />}
+                    {isSelected && <Check className="h-3 w-3 text-sky-500 shrink-0" />}
                     {source.name}
                     {/* A selected source with no key is skipped silently at run
                         time, so it has to look different from a working one. */}

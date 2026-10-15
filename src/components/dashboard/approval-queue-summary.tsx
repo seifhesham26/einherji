@@ -21,15 +21,15 @@ export default function ApprovalQueueSummary() {
     <Card className="rounded-xl">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <div className="rounded-md bg-violet-500/10 p-1.5">
-            <Inbox className="h-3.5 w-3.5 text-violet-500" />
+          <div className="rounded-lg bg-sky-500/15 border border-sky-200/60 dark:border-sky-800/60 p-1.5 shadow-2xs">
+            <Inbox className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
           </div>
-          <span className="text-sm font-medium">Approval Queue</span>
+          <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">Approval Queue</span>
         </div>
       </CardHeader>
       <CardContent className="flex items-center justify-between">
         <div>
-          <p className={`text-3xl font-semibold tabular-nums ${hasDrafts ? "text-violet-500" : ""}`}>
+          <p className={`console-mono text-3xl font-bold tabular-nums ${hasDrafts ? "text-sky-600 dark:text-sky-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.25)]" : ""}`}>
             {drafts.length}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -39,7 +39,7 @@ export default function ApprovalQueueSummary() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1"
+          className="gap-1.5 font-medium"
           onClick={() => router.push("/messages")}
         >
           Review <ArrowRight className="h-3.5 w-3.5" />

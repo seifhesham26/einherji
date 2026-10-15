@@ -95,8 +95,8 @@ export default function CvUpload({ onExtracted, model }: CvUploadProps) {
         onDragLeave={() => setIsDragging(false)}
         onClick={() => !file && fileInputRef.current?.click()}
         className={`
-          relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 transition-all cursor-pointer
-          ${isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}
+          relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 transition-all cursor-pointer backdrop-blur-xs
+          ${isDragging ? "border-sky-500 bg-sky-50/70 dark:bg-sky-950/40 shadow-[0_0_16px_rgba(14,165,233,0.25)]" : "border-sky-200/80 dark:border-sky-800/80 bg-sky-50/20 dark:bg-sky-950/20 hover:border-sky-400 dark:hover:border-sky-600 hover:bg-sky-50/50 dark:hover:bg-sky-950/40"}
           ${file ? "cursor-default" : ""}
         `}
       >
@@ -110,29 +110,29 @@ export default function CvUpload({ onExtracted, model }: CvUploadProps) {
 
         {file ? (
           <div className="flex items-center gap-3 w-full max-w-xs">
-            <FileText className="h-8 w-8 text-primary shrink-0" />
+            <FileText className="h-8 w-8 text-sky-600 dark:text-sky-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{file.name}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm font-semibold truncate text-slate-900 dark:text-slate-100">{file.name}</p>
+              <p className="console-mono text-xs text-slate-500 dark:text-slate-400">
                 {(file.size / 1024).toFixed(0)} KB · PDF
               </p>
             </div>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setFile(null); }}
-              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              className="shrink-0 text-slate-400 hover:text-destructive transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
         ) : (
           <>
-            <div className="rounded-full bg-muted p-3">
-              <Upload className="h-5 w-5 text-muted-foreground" />
+            <div className="rounded-full bg-sky-50 dark:bg-sky-950/60 border border-sky-200/60 dark:border-sky-800/60 p-3 shadow-2xs">
+              <Upload className="h-5 w-5 text-sky-600 dark:text-sky-400" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium">Drop your CV here</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Drop your CV here</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 or click to browse — PDF only, max 8 MB
               </p>
             </div>

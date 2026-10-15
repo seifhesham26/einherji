@@ -23,13 +23,13 @@ export default function ActivityFeed() {
           and made the column jump when it arrived. */}
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <div className="rounded-md bg-muted p-1.5">
-            <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+          <div className="rounded-lg bg-sky-500/10 dark:bg-sky-500/20 border border-sky-200/50 dark:border-sky-800/50 p-1.5 shadow-2xs">
+            <Activity className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
           </div>
-          <span className="text-sm font-medium">Recent activity</span>
+          <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">Recent activity</span>
           <Link
             href="/leads"
-            className="ml-auto inline-flex items-center gap-1 rounded-md text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="ml-auto inline-flex items-center gap-1 rounded-md text-xs font-medium text-slate-500 dark:text-slate-400 transition-colors hover:text-sky-600 dark:hover:text-sky-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
             All leads
             <ArrowRight className="h-3 w-3" />
@@ -57,7 +57,7 @@ export default function ActivityFeed() {
             <p className="text-xs text-muted-foreground mt-1">Run a scrape to get started.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-sky-100/70 dark:divide-sky-900/40">
             {recentLeads.map((lead) => {
               const status = getLeadStatusDisplay(lead.status);
 
@@ -67,8 +67,8 @@ export default function ActivityFeed() {
                   className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-semibold text-primary">
+                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-sky-500/15 to-cyan-500/15 border border-sky-200/70 dark:border-sky-800/70 flex items-center justify-center shrink-0 shadow-2xs">
+                      <span className="console-mono text-xs font-semibold text-sky-700 dark:text-sky-300">
                         {getInitials(lead.firstName, lead.lastName)}
                       </span>
                     </div>

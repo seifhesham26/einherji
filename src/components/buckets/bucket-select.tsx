@@ -33,7 +33,7 @@ export default function BucketSelect({
       <Label htmlFor={id}>{label}</Label>
       <select
         id={id}
-        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        className="w-full rounded-xl border border-sky-200/80 dark:border-sky-800/70 bg-card/70 dark:bg-card/40 px-3 py-2 text-sm text-foreground focus:border-sky-400 focus:outline-hidden focus:ring-2 focus:ring-sky-400/30 transition-all"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >

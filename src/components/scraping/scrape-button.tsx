@@ -39,7 +39,7 @@ export default function ScrapeButton({
   return (
     <Button
       size="sm"
-      className="gap-2 shrink-0"
+      className="gap-2 shrink-0 ice-shimmer font-semibold tracking-wide text-xs shadow-[0_2px_12px_rgba(14,165,233,0.3)] hover:shadow-[0_4px_18px_rgba(14,165,233,0.45)]"
       disabled={isBusy || Boolean(disabledReason)}
       title={title}
       onClick={() => scrape.mutate(bucketId ? { bucketId } : {})}

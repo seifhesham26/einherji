@@ -67,7 +67,7 @@ export default function CompaniesTable() {
 
   return (
     <>
-      <div className="rounded-xl border border-border overflow-x-auto">
+      <div className="rounded-xl border border-sky-200/70 dark:border-sky-800/60 bg-card/90 backdrop-blur-sm shadow-sm overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

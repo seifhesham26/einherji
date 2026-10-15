@@ -35,11 +35,11 @@ export default function RequestRecoveryForm() {
           {errors.email && <p className="text-xs text-destructive" role="alert">{errors.email.message}</p>}
         </div>
         {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" className="w-full ice-shimmer font-semibold uppercase tracking-wider text-xs" disabled={isSubmitting}>
           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Mail className="h-4 w-4" aria-hidden />} Send reset link
         </Button>
       </form>
     )}
-    <Link href="/login" className="inline-block text-sm underline underline-offset-4">Back to sign in</Link>
+    <Link href="/login" className="inline-block text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline">Back to sign in</Link>
   </div>;
 }

@@ -47,9 +47,10 @@ export default function ResetPasswordForm() {
       </div>
       {error && <div className="space-y-2"><p role="alert" className="text-sm text-destructive">{error}</p>
         <Link href="/login/forgot-password" className="text-sm underline underline-offset-4">Request a new link</Link></div>}
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
+      <Button type="submit" className="w-full ice-shimmer font-semibold uppercase tracking-wider text-xs" disabled={isSubmitting}>
         {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <KeyRound className="h-4 w-4" aria-hidden />} Change password
       </Button>
     </form>}
+    <Link href="/login" className="inline-block text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline">Back to sign in</Link>
   </div>;
 }

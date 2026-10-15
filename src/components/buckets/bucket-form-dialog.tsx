@@ -161,13 +161,13 @@ export default function BucketFormDialog({ onClose, bucket, onSaved }: BucketFor
                   key={value}
                   type="button"
                   onClick={() => selectKind(value)}
-                  className={`rounded-lg border p-3 text-left transition-colors ${
+                  className={`rounded-xl border p-3.5 text-left transition-all ${
                     form.kind === value
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-muted/40"
+                      ? "border-sky-400 bg-sky-50/80 dark:bg-sky-950/50 shadow-[0_0_12px_rgba(14,165,233,0.18)] ring-1 ring-sky-400/40"
+                      : "border-sky-100/90 dark:border-sky-900/40 hover:bg-sky-50/40 dark:hover:bg-sky-950/20"
                   }`}
                 >
-                  <p className="text-sm font-medium">{BUCKET_KIND_PRESETS[value].label}</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{BUCKET_KIND_PRESETS[value].label}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {BUCKET_KIND_PRESETS[value].description}
                   </p>
@@ -239,7 +239,7 @@ export default function BucketFormDialog({ onClose, bucket, onSaved }: BucketFor
           <Button variant="ghost" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!form.name.trim() || isSaving} className="gap-2">
+          <Button onClick={handleSave} disabled={!form.name.trim() || isSaving} className="gap-2 ice-shimmer rounded-xl">
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
             {isEditing ? "Save changes" : "Create bucket"}
           </Button>

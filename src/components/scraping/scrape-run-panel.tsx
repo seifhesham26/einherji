@@ -56,8 +56,11 @@ export default function ScrapeRunPanel({ isStarting }: ScrapeRunPanelProps) {
     return (
       <PanelFrame>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Loader2 className="h-4 w-4 animate-spin shrink-0 text-primary" />
+          <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500" />
+            </span>
             Scraping {run.sources.length} source{run.sources.length === 1 ? "" : "s"}
           </div>
 
@@ -71,7 +74,7 @@ export default function ScrapeRunPanel({ isStarting }: ScrapeRunPanelProps) {
             {cancelScrape.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <XCircle className="h-3.5 w-3.5" />
+              <XCircle className="h-3.5 w-3.5 text-destructive" />
             )}
             Stop
           </Button>
@@ -84,7 +87,7 @@ export default function ScrapeRunPanel({ isStarting }: ScrapeRunPanelProps) {
         />
 
         <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+          className="console-mono flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-400"
           // The bar is decoration for anyone not looking at it; this line is the
           // one a screen reader should hear updating.
           aria-live="polite"
@@ -99,7 +102,7 @@ export default function ScrapeRunPanel({ isStarting }: ScrapeRunPanelProps) {
           {secondsLeft > 0 && (
             <>
               <span aria-hidden>·</span>
-              <span className="tabular-nums">{secondsLeft}s until the time limit</span>
+              <span className="tabular-nums">{secondsLeft}s until time limit</span>
             </>
           )}
         </div>
@@ -120,11 +123,11 @@ function LastRunSummary({ run }: { run: NonNullable<ReturnType<typeof useGetLate
       ? { icon: XCircle, className: "text-destructive" }
       : run.errorMessage
         ? { icon: AlertTriangle, className: "text-amber-600 dark:text-amber-400" }
-        : { icon: CheckCircle2, className: "text-emerald-600 dark:text-emerald-400" };
+        : { icon: CheckCircle2, className: "text-sky-600 dark:text-sky-400" };
   const ToneIcon = tone.icon;
 
   return (
-    <div className="flex flex-wrap items-start gap-x-2 gap-y-1 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-start gap-x-2 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
       <ToneIcon className={`h-3.5 w-3.5 shrink-0 mt-px ${tone.className}`} />
       <span>
         Last scrape {finishedAt ? formatRelativeDate(finishedAt) : "recently"}
@@ -143,7 +146,7 @@ function LastRunSummary({ run }: { run: NonNullable<ReturnType<typeof useGetLate
 
 function PanelFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="space-y-2 rounded-xl border border-border bg-card p-3">{children}</div>
+    <div className="space-y-2.5 rounded-xl border border-sky-200/80 dark:border-sky-800/80 bg-sky-50/50 dark:bg-sky-950/30 p-3.5 backdrop-blur-sm shadow-sm">{children}</div>
   );
 }
 

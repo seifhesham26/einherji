@@ -21,12 +21,12 @@ const FAIR_MATCH = 40;
 
 function toneFor(score: number): string {
   if (score >= STRONG_MATCH) {
-    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25";
+    return "bg-sky-50 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300 border-sky-300/80 dark:border-sky-700/80 shadow-[0_0_8px_rgba(14,165,233,0.18)]";
   }
   if (score >= FAIR_MATCH) {
-    return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25";
+    return "bg-slate-100/90 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800";
   }
-  return "bg-muted text-muted-foreground border-border";
+  return "bg-slate-50/50 dark:bg-slate-950/50 text-slate-400 dark:text-slate-500 border-slate-200/60 dark:border-slate-900";
 }
 
 export default function JobScoreBadge({ score, reasons }: JobScoreBadgeProps) {
@@ -35,7 +35,7 @@ export default function JobScoreBadge({ score, reasons }: JobScoreBadgeProps) {
   if (score === null || score === undefined) {
     return (
       <span
-        className="shrink-0 rounded-md border border-dashed border-border px-1.5 py-1 text-[10px] text-muted-foreground"
+        className="shrink-0 rounded-md border border-dashed border-sky-200/60 dark:border-sky-800/60 px-1.5 py-1 text-[10px] text-muted-foreground console-mono"
         title="Scraped before scoring existed — it'll get a score next time this job is found."
       >
         —
@@ -47,11 +47,11 @@ export default function JobScoreBadge({ score, reasons }: JobScoreBadgeProps) {
 
   return (
     <span
-      className={`shrink-0 flex flex-col items-center rounded-md border px-1.5 py-0.5 tabular-nums ${toneFor(score)}`}
+      className={`shrink-0 flex flex-col items-center rounded-lg border px-1.5 py-0.5 tabular-nums console-mono transition-all ${toneFor(score)}`}
       title={`Match score ${score} of 100 — ${explanation}`}
     >
-      <span className="text-sm font-semibold leading-tight">{score}</span>
-      <span className="text-[9px] uppercase tracking-wide opacity-70 leading-tight">match</span>
+      <span className="text-sm font-bold leading-tight">{score}</span>
+      <span className="text-[9px] uppercase font-medium tracking-wide opacity-80 leading-tight">match</span>
     </span>
   );
 }

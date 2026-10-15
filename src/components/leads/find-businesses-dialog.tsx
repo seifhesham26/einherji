@@ -68,7 +68,7 @@ export default function FindBusinessesDialog({ bucketId }: { bucketId?: string |
       <Button
         size="sm"
         variant="outline"
-        className="gap-2"
+        className="gap-2 rounded-xl border-sky-200/80 dark:border-sky-800/80 bg-card/60 hover:bg-sky-50/80 dark:hover:bg-sky-950/40"
         onClick={() => {
           setSaveToBucketId(bucketId ?? "");
           // Seed the box from the bucket rather than making someone retype what
@@ -77,7 +77,7 @@ export default function FindBusinessesDialog({ bucketId }: { bucketId?: string |
           setIsOpen(true);
         }}
       >
-        <Building2 className="h-4 w-4" />
+        <Building2 className="h-4 w-4 text-sky-500" />
         Find businesses
       </Button>
 
@@ -126,7 +126,7 @@ export default function FindBusinessesDialog({ bucketId }: { bucketId?: string |
         />
 
         <Button
-          className="gap-2"
+          className="gap-2 ice-shimmer rounded-xl"
           disabled={query.trim().length < 2 || search.isPending}
           onClick={() => search.mutate({ query, regionCode: regionCode || undefined })}
         >
@@ -146,7 +146,7 @@ export default function FindBusinessesDialog({ bucketId }: { bucketId?: string |
               return (
                 <div
                   key={place.placeId}
-                  className="flex items-start justify-between gap-3 rounded-lg border border-border p-3"
+                  className="flex items-start justify-between gap-3 rounded-xl border border-sky-200/80 dark:border-sky-800/60 bg-sky-50/30 dark:bg-sky-950/20 p-3 hover:border-sky-400/60 transition-colors"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{place.name}</p>

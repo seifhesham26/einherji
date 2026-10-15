@@ -40,7 +40,7 @@ export default function KeyboardShortcutsHelp({ open, onOpenChange }: KeyboardSh
           {TRIAGE_SHORTCUTS.map((shortcut) => (
             <div key={shortcut.keys} className="flex items-center justify-between gap-4 py-1.5">
               <dt>
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                <kbd className="console-mono inline-flex h-6 min-w-6 items-center justify-center rounded border border-sky-200/90 dark:border-sky-800 bg-white dark:bg-slate-900 px-2 text-xs font-semibold text-slate-700 dark:text-sky-300 shadow-[0_2px_0_#bae6fd] dark:shadow-[0_2px_0_#0284c7]">
                   {shortcut.keys}
                 </kbd>
               </dt>

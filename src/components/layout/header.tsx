@@ -62,22 +62,24 @@ export default function Header({ onOpenSidebar }: { onOpenSidebar: () => void })
 
   return (
     <div className="shrink-0">
-      <header className="h-14 border-b border-border bg-card px-4 sm:px-6 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+      <header className="h-14 border-b border-sky-100/80 dark:border-sky-900/40 bg-card/80 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={onOpenSidebar}
-            className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
+            className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/60 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="text-sm font-semibold truncate">{resolvePageTitle(pathname)}</h1>
+          <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shadow-[0_0_8px_#38bdf8] shrink-0" />
+          <h1 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 truncate">{resolvePageTitle(pathname)}</h1>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setTheme(isDark ? "light" : "dark")}
+            className="rounded-lg text-slate-600 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-sky-950/60 hover:text-sky-600 dark:hover:text-sky-400 border border-transparent hover:border-sky-200/60 dark:hover:border-sky-800/60 transition-colors"
             // Icon-only, so without this a screen reader announces "button" and
             // nothing else.
             aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}

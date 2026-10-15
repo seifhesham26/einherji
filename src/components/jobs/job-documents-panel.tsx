@@ -111,9 +111,9 @@ export default function JobDocumentsPanel({ jobId }: { jobId: string }) {
       {isLoading ? (
         <Skeleton className="h-20 w-full rounded-lg" />
       ) : documents && documents.length > 0 ? (
-        <ul className="space-y-2">
+        <ul className="space-y-2.5">
           {documents.map((document) => (
-            <li key={document.id} className="rounded-lg border p-3 space-y-2">
+            <li key={document.id} className="rounded-xl border border-sky-200/80 dark:border-sky-800/70 bg-card/90 backdrop-blur-sm p-3.5 space-y-2 shadow-2xs">
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="text-[10px] font-normal">
                   {JOB_DOCUMENT_LABELS[document.kind]}

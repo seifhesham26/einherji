@@ -32,7 +32,7 @@ export default function AddCompanyForm() {
   return (
     <form
       onSubmit={form.handleSubmit(handleAdd)}
-      className="rounded-xl border border-border bg-card p-5 space-y-4"
+      className="rounded-xl border border-sky-200/70 dark:border-sky-800/60 bg-card/90 backdrop-blur-sm p-5 space-y-4 shadow-sm"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">

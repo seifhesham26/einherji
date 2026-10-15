@@ -83,10 +83,10 @@ export default function SavedViewsBar({
           onClick={() => onSelect(null, {})}
           aria-pressed={activeViewId === null}
           className={cn(
-            "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+            "rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
             activeViewId === null
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-card hover:bg-accent",
+              ? "border-sky-400 bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow-[0_2px_8px_rgba(14,165,233,0.3)]"
+              : "border-sky-200/80 dark:border-sky-800/80 bg-card/80 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-sky-950/60 hover:border-sky-300 dark:hover:border-sky-700",
           )}
         >
           Everything
@@ -99,10 +99,10 @@ export default function SavedViewsBar({
             onClick={() => onSelect(view.id, view.filters)}
             aria-pressed={view.id === activeViewId}
             className={cn(
-              "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+              "rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               view.id === activeViewId
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card hover:bg-accent",
+                ? "border-sky-400 bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow-[0_2px_8px_rgba(14,165,233,0.3)]"
+                : "border-sky-200/80 dark:border-sky-800/80 bg-card/80 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-sky-950/60 hover:border-sky-300 dark:hover:border-sky-700",
             )}
           >
             {view.name}

@@ -38,9 +38,9 @@ export default function ReadyToSendList() {
 
   if (messages.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border py-12 text-center">
-        <p className="text-sm font-medium">Nothing waiting to send</p>
-        <p className="text-xs text-muted-foreground mt-1">
+      <div className="rounded-2xl border border-dashed border-sky-300/60 dark:border-sky-800/60 bg-sky-50/30 dark:bg-sky-950/15 py-12 text-center">
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Nothing waiting to send</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
           {sentToday > 0
             ? `You sent ${sentToday} message${sentToday === 1 ? "" : "s"} today.`
             : "Approved messages show up here, ready to copy."}
@@ -93,7 +93,7 @@ function ReadyToSendCard({ item }: { item: MessageWithContext }) {
   const leadName = [item.lead?.firstName, item.lead?.lastName].filter(Boolean).join(" ");
 
   return (
-    <Card className="rounded-xl">
+    <Card className="rounded-2xl">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -118,14 +118,14 @@ function ReadyToSendCard({ item }: { item: MessageWithContext }) {
       </CardHeader>
 
       <CardContent className="pb-3">
-        <p className="whitespace-pre-wrap rounded-md bg-muted/40 p-3 font-mono text-sm">
+        <p className="whitespace-pre-wrap rounded-xl border border-sky-100 dark:border-sky-900/40 bg-sky-50/40 dark:bg-sky-950/20 p-3.5 console-mono text-xs leading-relaxed text-slate-800 dark:text-slate-200">
           {bodyToSend}
         </p>
       </CardContent>
 
-      <CardFooter className="gap-2 flex-wrap border-t border-border pt-3">
-        <Button onClick={handleCopy} variant="outline" className="gap-2">
-          {hasCopied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+      <CardFooter className="gap-2 flex-wrap border-t border-sky-100/80 dark:border-sky-900/40 pt-3">
+        <Button onClick={handleCopy} variant="outline" className="gap-2 rounded-xl">
+          {hasCopied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4 text-sky-500" />}
           {hasCopied ? "Copied" : "Copy message"}
         </Button>
 
@@ -135,7 +135,7 @@ function ReadyToSendCard({ item }: { item: MessageWithContext }) {
             href={item.lead.linkedinUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={buttonVariants({ variant: "ghost", className: "gap-2" })}
+            className={buttonVariants({ variant: "ghost", className: "gap-2 rounded-xl text-sky-600 dark:text-sky-400 hover:text-sky-700" })}
           >
             <ExternalLink className="h-4 w-4" />
             Open profile
@@ -145,7 +145,7 @@ function ReadyToSendCard({ item }: { item: MessageWithContext }) {
         <Button
           onClick={() => markSent.mutate({ messageId: item.message.id })}
           disabled={markSent.isPending}
-          className="ml-auto gap-2"
+          className="ml-auto gap-2 ice-shimmer rounded-xl"
         >
           {markSent.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

@@ -23,8 +23,8 @@ import { formatRelativeDate } from "@/utils/format-relative-date";
 function LeadAvatar({ firstName, lastName }: { firstName: string; lastName?: string | null }) {
   const initials = `${firstName[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
   return (
-    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-      <span className="text-xs font-semibold text-primary" aria-hidden>
+    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-sky-500/15 to-cyan-500/15 border border-sky-200/70 dark:border-sky-800/70 flex items-center justify-center shrink-0 shadow-2xs">
+      <span className="console-mono text-xs font-bold text-sky-700 dark:text-sky-300" aria-hidden>
         {initials}
       </span>
     </div>
@@ -189,7 +189,7 @@ export default function LeadsTable() {
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-border overflow-x-auto">
+        <div className="rounded-xl border border-sky-200/70 dark:border-sky-800/60 bg-card/90 backdrop-blur-sm overflow-x-auto shadow-sm">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

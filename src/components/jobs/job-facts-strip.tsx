@@ -27,7 +27,7 @@ export default function JobFactsStrip({ job }: { job: Job }) {
 
   if (!job.factsExtractedAt) {
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-sky-200/80 dark:border-sky-800/80 bg-sky-50/20 dark:bg-sky-950/20 p-3">
         <p className="flex-1 text-xs text-muted-foreground">
           {hasDescription
             ? "This posting hasn't been read yet. One pass pulls out the seniority, the real salary and the remote policy — and turns them into filters."

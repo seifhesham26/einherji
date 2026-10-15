@@ -43,9 +43,9 @@ const VERDICT_STYLES: Record<FitVerdict, { icon: React.ReactNode; className: str
 };
 
 function matchTone(matchPercent: number): string {
-  if (matchPercent >= STRONG_MATCH) return "text-emerald-600 dark:text-emerald-400";
-  if (matchPercent >= WEAK_MATCH) return "text-amber-600 dark:text-amber-400";
-  return "text-red-600 dark:text-red-400";
+  if (matchPercent >= STRONG_MATCH) return "text-sky-600 dark:text-sky-400 font-bold";
+  if (matchPercent >= WEAK_MATCH) return "text-amber-600 dark:text-amber-400 font-bold";
+  return "text-red-500 font-bold";
 }
 
 export default function JobFitReport({ jobId }: { jobId: string }) {
@@ -56,14 +56,14 @@ export default function JobFitReport({ jobId }: { jobId: string }) {
 
   if (!report) {
     return (
-      <div className="rounded-lg border border-dashed p-4 text-center">
+      <div className="rounded-xl border border-dashed border-sky-200/80 dark:border-sky-800/80 bg-sky-50/20 dark:bg-sky-950/20 p-4 text-center backdrop-blur-xs">
         <p className="text-xs text-muted-foreground">
           Read this posting against your CV — requirement by requirement, with what you&apos;re
           missing and what to lead with.
         </p>
         <Button
           size="sm"
-          className="mt-3"
+          className="mt-3 ice-shimmer font-semibold uppercase tracking-wider text-xs"
           disabled={generateReport.isPending}
           onClick={() => generateReport.mutate({ jobId, regenerate: false })}
         >

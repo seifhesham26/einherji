@@ -74,13 +74,13 @@ export default function ImportLeadsDialog({ defaultBucketId }: ImportLeadsDialog
       <Button
         size="sm"
         variant="outline"
-        className="gap-2"
+        className="gap-2 rounded-xl border-sky-200/80 dark:border-sky-800/80 bg-card/60 hover:bg-sky-50/80 dark:hover:bg-sky-950/40"
         onClick={() => {
           setBucketId(defaultBucketId ?? "");
           setIsOpen(true);
         }}
       >
-        <ClipboardPaste className="h-4 w-4" />
+        <ClipboardPaste className="h-4 w-4 text-sky-500" />
         Import list
       </Button>
 
@@ -108,7 +108,7 @@ export default function ImportLeadsDialog({ defaultBucketId }: ImportLeadsDialog
         <BucketSelect id="importBucket" value={bucketId} onChange={setBucketId} />
 
         {parsed.leads.length > 0 && (
-          <div className="rounded-lg border border-border p-3 space-y-2">
+          <div className="rounded-xl border border-sky-200/80 dark:border-sky-800/60 bg-sky-50/30 dark:bg-sky-950/20 p-3 space-y-2">
             <p className="text-sm font-medium">
               {parsed.leads.length} business{parsed.leads.length === 1 ? "" : "es"} ready
               {parsed.leads.filter((lead) => lead.phone).length > 0 && (
@@ -163,7 +163,7 @@ export default function ImportLeadsDialog({ defaultBucketId }: ImportLeadsDialog
             Cancel
           </Button>
           <Button
-            className="gap-2"
+            className="gap-2 ice-shimmer rounded-xl"
             disabled={parsed.leads.length === 0 || tooMany || importLeads.isPending}
             onClick={() =>
               importLeads.mutate({
